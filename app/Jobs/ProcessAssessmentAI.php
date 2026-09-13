@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\ActionPlanItem;
 use App\Models\Assessment;
 use App\Notifications\AssessmentCompletedNotification;
+use App\Services\GeminiAssessmentAnalysisService;
 use App\Services\GeminiNlgService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -25,7 +26,7 @@ class ProcessAssessmentAI implements ShouldQueue
 
     public function __construct(public Assessment $assessment) {}
 
-    public function handle(GeminiNlgService $gemini): void
+    public function handle(GeminiNlgService $gemini, GeminiAssessmentAnalysisService $analysisService): void
     {
         $summary = $gemini->generateAssessmentSummary($this->assessment);
 
@@ -33,6 +34,18 @@ class ProcessAssessmentAI implements ShouldQueue
             $this->assessment->update([
                 'ai_summary_ar' => $summary,
                 'ai_generated_at' => now(),
+            ]);
+        }
+
+        // Structured analysis (saved once; the results page reuses it instead
+        // of regenerating on every visit). Falls back to rule-based content
+        // when Gemini is unavailable.
+        try {
+            $analysisService->generate($this->assessment);
+        } catch (\Throwable $e) {
+            Log::channel('ai')->error('Assessment analysis generation failed', [
+                'assessment_id' => $this->assessment->id,
+                'error' => $e->getMessage(),
             ]);
         }
 

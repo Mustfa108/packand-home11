@@ -15,9 +15,14 @@ class Assessment extends Model
 
     protected $fillable = [
         'user_id',
+        'assessment_version_id',
         'status',
         'overall_score',
         'readiness_level',
+        'org_type',
+        'org_size',
+        'team_member_count',
+        'completed_at',
         'ai_summary_ar',
         'ai_generated_at',
         'pdf_path',
@@ -27,13 +32,19 @@ class Assessment extends Model
     {
         return [
             'ai_generated_at' => 'datetime',
-            'overall_score' => 'float',
+            'completed_at'    => 'datetime',
+            'overall_score'   => 'float',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function version(): BelongsTo
+    {
+        return $this->belongsTo(AssessmentVersion::class, 'assessment_version_id');
     }
 
     public function answers(): HasMany
@@ -49,6 +60,16 @@ class Assessment extends Model
     public function actionPlan(): HasOne
     {
         return $this->hasOne(ActionPlan::class);
+    }
+
+    public function aiAnalyses(): HasMany
+    {
+        return $this->hasMany(AiAnalysis::class);
+    }
+
+    public function chatMessages(): HasMany
+    {
+        return $this->hasMany(AiChatMessage::class);
     }
 
     public function getReadinessLevelArAttribute(): string
@@ -74,5 +95,26 @@ class Assessment extends Model
     public function getPdfReadyAttribute(): bool
     {
         return ! is_null($this->pdf_path);
+    }
+
+    public function getOrgTypeArAttribute(): string
+    {
+        return match ($this->org_type) {
+            'civil_society'  => 'منظمة مجتمع مدني',
+            'volunteer_team' => 'فريق تطوعي',
+            'startup'        => 'مشروع ناشئ',
+            'other'          => 'أخرى',
+            default          => 'غير محدد',
+        };
+    }
+
+    public function getOrgSizeArAttribute(): string
+    {
+        return match ($this->org_size) {
+            'small'  => 'صغيرة',
+            'medium' => 'متوسطة',
+            'large'  => 'كبيرة',
+            default  => 'غير محدد',
+        };
     }
 }

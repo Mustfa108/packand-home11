@@ -9,7 +9,6 @@ use App\Jobs\GenerateAssessmentPdf;
 use App\Jobs\ProcessAssessmentAI;
 use App\Models\Assessment;
 use App\Models\AssessmentAnswer;
-use App\Models\Pillar;
 use App\Services\AssessmentScoringService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,15 +20,26 @@ class AssessmentController extends Controller
 {
     public function getQuestions(): JsonResponse
     {
-        $pillars = Pillar::with(['questions' => function ($query) {
+        $version = AssessmentScoringService::publishedVersion();
+
+        $pillarsQuery = \App\Models\Pillar::with(['questions' => function ($query) {
             $query->where('is_active', true)->orderBy('display_order');
         }])
-            ->orderBy('display_order')
-            ->get();
+            ->where('is_active', true)
+            ->orderBy('display_order');
+
+        if ($version) {
+            $pillarsQuery->where('assessment_version_id', $version->id);
+        } else {
+            $pillarsQuery->whereNull('assessment_version_id');
+        }
+
+        $pillars = $pillarsQuery->get();
 
         $totalQuestions = $pillars->sum(fn ($p) => $p->questions->count());
 
         $data = [
+            'version_number' => $version?->version_number,
             'total_questions' => $totalQuestions,
             'pillars' => $pillars->map(fn ($pillar) => [
                 'id' => $pillar->id,
@@ -38,11 +48,13 @@ class AssessmentController extends Controller
                 'name_en' => $pillar->name_en,
                 'description_ar' => $pillar->description_ar,
                 'description_en' => $pillar->description_en,
+                'weight' => $pillar->weight,
                 'questions' => $pillar->questions->map(fn ($q) => [
                     'id' => $q->id,
                     'text_ar' => $q->text_ar,
                     'text_en' => $q->text_en,
                     'display_order' => $q->display_order,
+                    'weight' => $q->weight,
                 ]),
             ]),
         ];
@@ -65,13 +77,17 @@ class AssessmentController extends Controller
             ], 'لديك تقييم قيد التنفيذ.');
         }
 
+        $version = AssessmentScoringService::publishedVersion();
+
         $assessment = Assessment::create([
             'user_id' => $user->id,
+            'assessment_version_id' => $version?->id,
             'status' => 'in_progress',
         ]);
 
         return ApiResponse::success([
             'assessment_id' => $assessment->id,
+            'version_number' => $version?->version_number,
         ], 'تم بدء التقييم بنجاح.', 201);
     }
 
@@ -86,6 +102,23 @@ class AssessmentController extends Controller
 
         if ($assessment->status !== 'in_progress') {
             return ApiResponse::error('تم تقديم هذا التقييم مسبقاً ولا يمكن تعديله.', 422);
+        }
+
+        // Answers must cover exactly the active questions of the assessment's version.
+        $validQuestionIds = app(AssessmentScoringService::class)
+            ->versionQuestions($assessment)
+            ->where('is_active', true)
+            ->pluck('id');
+
+        $submittedIds = collect($request->answers)->pluck('question_id')->unique()->values();
+        $missing = $validQuestionIds->diff($submittedIds);
+        $invalid = $submittedIds->diff($validQuestionIds);
+
+        if ($missing->isNotEmpty() || $invalid->isNotEmpty()) {
+            return ApiResponse::error(
+                'يجب الإجابة على جميع أسئلة التقييم المطلوبة دون أسئلة إضافية.',
+                422
+            );
         }
 
         try {
@@ -127,7 +160,7 @@ class AssessmentController extends Controller
     public function results(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $assessment = Assessment::with(['pillarResults.pillar', 'actionPlan.items.pillar'])->findOrFail($id);
+        $assessment = Assessment::with(['pillarResults.pillar', 'actionPlan.items.pillar', 'version'])->findOrFail($id);
 
         if ($user->cannot('view', $assessment)) {
             return ApiResponse::error('غير مصرح لك بعرض هذا التقييم.', 403);
@@ -137,11 +170,11 @@ class AssessmentController extends Controller
             return ApiResponse::error('لم يكتمل تحليل التقييم بعد، يرجى الانتظار.', 422);
         }
 
-        $pillarResults = $assessment->pillarResults->sortBy('pillar.display_order')->map(fn ($r) => [
+        $pillarResults = $assessment->pillarResults->sortBy(fn ($r) => $r->pillar->display_order ?? $r->pillar_id)->map(fn ($r) => [
             'pillar_id' => $r->pillar_id,
-            'pillar_key' => $r->pillar->key,
-            'pillar_name_ar' => $r->pillar->name_ar,
-            'pillar_name_en' => $r->pillar->name_en,
+            'pillar_key' => $r->pillar?->key,
+            'pillar_name_ar' => $r->pillar_name_ar ?? $r->pillar?->name_ar,
+            'pillar_name_en' => $r->pillar_name_en ?? $r->pillar?->name_en,
             'raw_score' => $r->raw_score,
             'max_score' => $r->max_score,
             'percentage' => $r->percentage,
@@ -201,10 +234,14 @@ class AssessmentController extends Controller
                 'readiness_level_ar' => $assessment->readiness_level_ar,
                 'readiness_level_en' => $assessment->readiness_level_en,
                 'readiness_color' => $assessment->readiness_color,
+                'version_number' => $assessment->version?->version_number,
+                'org_type' => $assessment->org_type,
+                'org_size' => $assessment->org_size,
                 'ai_summary_ar' => $assessment->ai_summary_ar,
                 'ai_ready' => $assessment->ai_ready,
                 'pdf_ready' => $assessment->pdf_ready,
                 'created_at' => $assessment->created_at,
+                'completed_at' => $assessment->completed_at,
             ],
             'pillar_results' => $pillarResults,
             'action_plan' => $actionPlanData,
@@ -213,7 +250,8 @@ class AssessmentController extends Controller
 
     public function history(Request $request): JsonResponse
     {
-        $assessments = Assessment::where('user_id', $request->user()->id)
+        $assessments = Assessment::with('version')
+            ->where('user_id', $request->user()->id)
             ->where('status', 'completed')
             ->orderByDesc('created_at')
             ->paginate(10);

@@ -13,6 +13,8 @@ class AssessmentPillarResult extends Model
     protected $fillable = [
         'assessment_id',
         'pillar_id',
+        'pillar_name_ar',
+        'pillar_name_en',
         'raw_score',
         'max_score',
         'percentage',

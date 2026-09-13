@@ -14,7 +14,7 @@ class SubmitAssessmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'answers'                => 'required|array|size:18',
+            'answers'                => 'required|array|min:1',
             'answers.*.question_id'  => 'required|integer|exists:questions,id|distinct',
             'answers.*.score'        => 'required|integer|min:1|max:5',
         ];
@@ -25,7 +25,6 @@ class SubmitAssessmentRequest extends FormRequest
         return [
             'answers.required'               => 'يجب تقديم إجابات التقييم.',
             'answers.array'                  => 'صيغة الإجابات غير صحيحة.',
-            'answers.size'                   => 'يجب الإجابة على جميع الأسئلة الثمانية عشر.',
             'answers.*.question_id.required' => 'معرّف السؤال مطلوب لكل إجابة.',
             'answers.*.question_id.exists'   => 'أحد معرّفات الأسئلة غير موجود.',
             'answers.*.question_id.distinct' => 'لا يمكن تكرار السؤال نفسه.',

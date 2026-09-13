@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             PillarSeeder::class,
             QuestionSeeder::class,
             AdminSeeder::class,
+            AssessmentVersionSeeder::class,
         ]);
     }
 }

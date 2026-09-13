@@ -1,8 +1,13 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminAiAnalysisController;
 use App\Http\Controllers\Admin\AdminAssessmentController;
+use App\Http\Controllers\Admin\AdminAssessmentVersionController;
 use App\Http\Controllers\Admin\AdminAuthController;
+use App\Http\Controllers\Admin\AdminAxisController;
 use App\Http\Controllers\Admin\AdminDashboardController;
+use App\Http\Controllers\Admin\AdminQuestionController;
+use App\Http\Controllers\Admin\AdminStatisticsController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordChangeController;
@@ -10,9 +15,12 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\User\ActionPlanItemController;
+use App\Http\Controllers\User\AiAnalysisController;
 use App\Http\Controllers\User\AssessmentController;
+use App\Http\Controllers\User\AssessmentResultController;
 use App\Http\Controllers\User\DashboardController;
 use App\Http\Controllers\User\ExpansionAreaController;
+use App\Http\Controllers\User\OrganizationProfileController;
 use App\Http\Controllers\User\ProfileController;
 use App\Http\Controllers\User\ProjectReviewController;
 use App\Http\Controllers\User\ReportController;
@@ -49,6 +57,9 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
             'name' => $user->name,
             'email' => $user->email,
             'organization_name' => $user->organization_name,
+            'org_type' => $user->org_type,
+            'org_size' => $user->org_size,
+            'team_member_count' => $user->team_member_count,
             'locale' => $user->locale ?? 'ar',
             'theme' => $user->theme ?? 'system',
             'email_verified_at' => $user->email_verified_at,
@@ -61,6 +72,9 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     Route::get('profile/preferences', [ProfileController::class, 'preferences']);
     Route::patch('profile/preferences', [ProfileController::class, 'updatePreferences']);
+
+    Route::get('profile/organization', [OrganizationProfileController::class, 'show']);
+    Route::patch('profile/organization', [OrganizationProfileController::class, 'update']);
 
     Route::get('dashboard', [DashboardController::class, 'index']);
 
@@ -77,6 +91,19 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('{id}/submit', [AssessmentController::class, 'submit']);
         Route::get('{id}/results', [AssessmentController::class, 'results']);
         Route::get('history', [AssessmentController::class, 'history']);
+    });
+
+    // Assessment results: list, details, comparison and progress.
+    Route::prefix('assessments')->group(function () {
+        Route::get('/', [AssessmentResultController::class, 'index']);
+        Route::get('compare', [AssessmentResultController::class, 'compare']);
+        Route::get('progress', [AssessmentResultController::class, 'progress']);
+        Route::get('{id}', [AssessmentResultController::class, 'show']);
+
+        Route::post('{id}/ai-analysis', [AiAnalysisController::class, 'store']);
+        Route::get('{id}/ai-analysis', [AiAnalysisController::class, 'show']);
+        Route::post('{id}/ai-chat', [AiAnalysisController::class, 'chat']);
+        Route::get('{id}/ai-chat', [AiAnalysisController::class, 'chatHistory']);
     });
 
     Route::patch('action-plan/items/{id}', [ActionPlanItemController::class, 'updateStatus']);
@@ -107,9 +134,33 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware(['auth:sanctum', 'is_admin', 'throttle:api'])->group(function () {
         Route::get('dashboard', [AdminDashboardController::class, 'index']);
+        Route::get('statistics', [AdminStatisticsController::class, 'index']);
         Route::get('assessments', [AdminAssessmentController::class, 'index']);
         Route::get('assessments/{id}', [AdminAssessmentController::class, 'show']);
         Route::get('users', [AdminDashboardController::class, 'users']);
         Route::get('analytics/pillars', [AdminDashboardController::class, 'pillarAnalytics']);
+
+        // Axes (pillars) and questions management.
+        Route::get('axes', [AdminAxisController::class, 'index']);
+        Route::post('axes', [AdminAxisController::class, 'store']);
+        Route::patch('axes/{id}', [AdminAxisController::class, 'update']);
+        Route::patch('axes/{id}/toggle', [AdminAxisController::class, 'toggle']);
+
+        Route::get('questions', [AdminQuestionController::class, 'index']);
+        Route::post('questions', [AdminQuestionController::class, 'store']);
+        Route::patch('questions/{id}', [AdminQuestionController::class, 'update']);
+        Route::patch('questions/{id}/toggle', [AdminQuestionController::class, 'toggle']);
+
+        // Questionnaire versioning.
+        Route::get('assessment-versions', [AdminAssessmentVersionController::class, 'index']);
+        Route::post('assessment-versions', [AdminAssessmentVersionController::class, 'store']);
+        Route::get('assessment-versions/{id}', [AdminAssessmentVersionController::class, 'show']);
+        Route::post('assessment-versions/{id}/publish', [AdminAssessmentVersionController::class, 'publish']);
+
+        // AI analyses review.
+        Route::get('ai-analyses', [AdminAiAnalysisController::class, 'index']);
+        Route::get('ai-analyses/{id}', [AdminAiAnalysisController::class, 'show']);
+        Route::post('ai-analyses/{id}/regenerate', [AdminAiAnalysisController::class, 'regenerate']);
+        Route::patch('ai-analyses/{id}/review', [AdminAiAnalysisController::class, 'review']);
     });
 });

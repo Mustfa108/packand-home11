@@ -1,0 +1,155 @@
+{
+  "info": {
+    "name": "HumaScale API v2",
+    "description": "HumaScale platform API — organization profiles, questionnaire versioning (axes/questions), weighted assessment scoring, comparison, admin statistics, and AI analysis (Gemini) with rule-based fallbacks. All responses are JSON with Arabic messages.\n\nBase URL: http://localhost:8000/api\n\nAuth: Bearer token via /api/auth/login (users) or /api/admin/login (admins) using Laravel Sanctum.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Organization Profile",
+      "item": [
+        {
+          "name": "Show organization profile",
+          "request": { "method": "GET", "url": "{{base}}/profile/organization" }
+        },
+        {
+          "name": "Update organization profile",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base}}/profile/organization",
+            "body": { "mode": "raw", "raw": "{\n  \"org_type\": \"volunteer_team\",\n  \"org_size\": \"small\",\n  \"team_member_count\": 8\n}" }
+          },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// org_type: civil_society | volunteer_team | startup | other", "// org_size: small | medium | large (team_member_count required for small/medium)"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Assessment Flow",
+      "item": [
+        { "name": "Get questionnaire (published version)", "request": { "method": "GET", "url": "{{base}}/assessment/questions" } },
+        { "name": "Start assessment", "request": { "method": "POST", "url": "{{base}}/assessment/start", "body": { "mode": "raw", "raw": "{}" } } },
+        {
+          "name": "Submit assessment",
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/assessment/1/submit",
+            "body": { "mode": "raw", "raw": "{\n  \"answers\": [\n    { \"question_id\": 1, \"score\": 4 },\n    { \"question_id\": 2, \"score\": 3 }\n  ]\n}" }
+          },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// score: 1..5. All active questions of the version must be answered.", "// Scores are recomputed server-side; frontend values are never trusted."] } }]
+        },
+        { "name": "Assessment results (with action plan)", "request": { "method": "GET", "url": "{{base}}/assessment/1/results" } }
+      ]
+    },
+    {
+      "name": "Assessment Results & Comparison",
+      "item": [
+        { "name": "List my completed assessments", "request": { "method": "GET", "url": "{{base}}/assessments" } },
+        { "name": "Assessment details (axes)", "request": { "method": "GET", "url": "{{base}}/assessments/1" } },
+        {
+          "name": "Compare two assessments",
+          "request": { "method": "GET", "url": "{{base}}/assessments/compare?first_id=1&second_id=2" },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// Returns overall delta + percent, per-axis rows, improved/declined/unchanged axes,", "// most_improved, most_declined. Ownership enforced: only own assessments."] } }]
+        },
+        { "name": "Progress over time (chart)", "request": { "method": "GET", "url": "{{base}}/assessments/progress" } }
+      ]
+    },
+    {
+      "name": "AI Analysis & Chat",
+      "item": [
+        {
+          "name": "Generate AI analysis",
+          "request": { "method": "POST", "url": "{{base}}/assessments/1/ai-analysis" },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// Requires completed org profile (org_type + org_size). Saved once; repeats return the same analysis.", "// On Gemini failure: rule-based fallback (is_fallback=true). Rate-limited per user/day."] } }]
+        },
+        { "name": "Get AI analysis", "request": { "method": "GET", "url": "{{base}}/assessments/1/ai-analysis" } },
+        {
+          "name": "AI chat (ask about results)",
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/assessments/1/ai-chat",
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"لماذا حصلت على هذه النتيجة؟\"\n}" }
+          },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// Answered only within assessment context. Max length 500 chars, 30 msgs/day.", "// 429 when quota exceeded, 422 for validation errors."] } }]
+        },
+        { "name": "AI chat history", "request": { "method": "GET", "url": "{{base}}/assessments/1/ai-chat" } }
+      ]
+    },
+    {
+      "name": "Admin — Statistics",
+      "item": [
+        {
+          "name": "Platform statistics",
+          "request": { "method": "GET", "url": "{{base}}/admin/statistics?from=2026-01-01&to=2026-12-31&type=startup&size=small" },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// Filters optional. Returns totals, average readiness, readiness distribution,", "// axis averages, strongest/weakest axis, org type/size distribution, time series."] } }]
+        }
+      ]
+    },
+    {
+      "name": "Admin — Axes",
+      "item": [
+        { "name": "List axes (draft or published)", "request": { "method": "GET", "url": "{{base}}/admin/axes?version_id=1" } },
+        {
+          "name": "Create axis",
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/admin/axes",
+            "body": { "mode": "raw", "raw": "{\n  \"version_id\": 1,\n  \"key\": \"governance\",\n  \"name_ar\": \"الحوكمة\",\n  \"description_ar\": \"محور الحوكمة والشفافية\",\n  \"display_order\": 7,\n  \"weight\": 10\n}" }
+          }
+        },
+        { "name": "Update axis (weight/order)", "request": { "method": "PATCH", "url": "{{base}}/admin/axes/1", "body": { "mode": "raw", "raw": "{\n  \"weight\": 15\n}" } } },
+        { "name": "Toggle axis (deactivate, never delete)", "request": { "method": "PATCH", "url": "{{base}}/admin/axes/1/toggle" } }
+      ]
+    },
+    {
+      "name": "Admin — Questions",
+      "item": [
+        { "name": "List questions", "request": { "method": "GET", "url": "{{base}}/admin/questions?version_id=1" } },
+        {
+          "name": "Create question (linked to axis)",
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/admin/questions",
+            "body": { "mode": "raw", "raw": "{\n  \"version_id\": 1,\n  \"pillar_id\": 1,\n  \"text_ar\": \"هل لديكم سياسة مكتوبة للاستقطاب؟\",\n  \"display_order\": 99,\n  \"weight\": 10\n}" }
+          }
+        },
+        { "name": "Update question (weight/order/text)", "request": { "method": "PATCH", "url": "{{base}}/admin/questions/1", "body": { "mode": "raw", "raw": "{\n  \"weight\": 12\n}" } } },
+        { "name": "Toggle question (deactivate, never delete)", "request": { "method": "PATCH", "url": "{{base}}/admin/questions/1/toggle" } }
+      ]
+    },
+    {
+      "name": "Admin — Assessment Versions",
+      "item": [
+        { "name": "List versions", "request": { "method": "GET", "url": "{{base}}/admin/assessment-versions" } },
+        {
+          "name": "Create draft (copies latest published)",
+          "request": { "method": "POST", "url": "{{base}}/admin/assessment-versions", "body": { "mode": "raw", "raw": "{\n  \"notes_ar\": \"تعديل أوزان المحاور\"\n}" } }
+        },
+        {
+          "name": "Version details + weight report",
+          "request": { "method": "GET", "url": "{{base}}/admin/assessment-versions/1" },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// weight_report: axis_weight_sum must be 100, each axis's question_weight_sum must be 100.", "// Publish is rejected (422) when sums are invalid."] } }]
+        },
+        {
+          "name": "Publish draft",
+          "request": { "method": "POST", "url": "{{base}}/admin/assessment-versions/1/publish" },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// Only one published version at a time; previous is archived.", "// Published versions become immutable."] } }]
+        }
+      ]
+    },
+    {
+      "name": "Admin — AI Analyses Review",
+      "item": [
+        { "name": "List AI analyses", "request": { "method": "GET", "url": "{{base}}/admin/ai-analyses?status=completed" } },
+        { "name": "AI analysis details", "request": { "method": "GET", "url": "{{base}}/admin/ai-analyses/1" } },
+        { "name": "Regenerate analysis", "request": { "method": "POST", "url": "{{base}}/admin/ai-analyses/1/regenerate" } },
+        {
+          "name": "Review (approve/reject)",
+          "request": { "method": "PATCH", "url": "{{base}}/admin/ai-analyses/1/review", "body": { "mode": "raw", "raw": "{\n  \"decision\": \"approved\"\n}" } }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base", "value": "http://localhost:8000/api" }
+  ]
+}

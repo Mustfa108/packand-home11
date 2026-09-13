@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('pillars', function (Blueprint $table) {
             $table->id();
-            $table->string('key', 50)->unique();
+            $table->string('key', 50)->index();
             $table->string('name_ar');
             $table->text('description_ar');
             $table->unsignedTinyInteger('display_order')->default(0);

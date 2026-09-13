@@ -41,21 +41,44 @@ class DashboardController extends Controller
             'percentage' => $r->percentage,
         ])->values();
 
-        $strengths = $pillarResults->where('is_weak', false)
-            ->sortByDesc('percentage')
-            ->take(2)
-            ->map(fn ($r) => [
-                'pillar_ar' => $r->pillar->name_ar,
-                'pillar_en' => $r->pillar->name_en,
-                'percentage' => $r->percentage,
-            ])->values();
+        $sortedByScore = $pillarResults->sortByDesc('percentage')->values();
+        $strongest = $sortedByScore->first();
+        $weakest = $sortedByScore->last();
 
-        $weaknesses = $pillarResults->where('is_weak', true)
-            ->sortBy('percentage')
-            ->map(fn ($r) => [
-                'pillar_ar' => $r->pillar->name_ar,
-                'pillar_en' => $r->pillar->name_en,
-                'percentage' => $r->percentage,
+        $previousAssessment = Assessment::where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->where('id', '!=', $latestAssessment->id)
+            ->where(function ($query) use ($latestAssessment) {
+                $query->where('completed_at', '<', $latestAssessment->completed_at ?? $latestAssessment->created_at)
+                    ->orWhereNull('completed_at')
+                    ->where('created_at', '<', $latestAssessment->created_at);
+            })
+            ->orderByDesc('completed_at')
+            ->orderByDesc('created_at')
+            ->first();
+
+        $improvement = null;
+        if ($previousAssessment && $previousAssessment->overall_score !== null && $latestAssessment->overall_score !== null) {
+            $improvement = [
+                'previous_score' => $previousAssessment->overall_score,
+                'difference'     => round($latestAssessment->overall_score - $previousAssessment->overall_score, 2),
+                'direction'      => $latestAssessment->overall_score > $previousAssessment->overall_score
+                    ? 'improved'
+                    : ($latestAssessment->overall_score < $previousAssessment->overall_score ? 'declined' : 'unchanged'),
+                'previous_assessment_id' => $previousAssessment->id,
+            ];
+        }
+
+        // Score over time (for the trend chart).
+        $trendPoints = Assessment::where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->orderBy('completed_at')
+            ->orderBy('created_at')
+            ->get(['id', 'overall_score', 'completed_at', 'created_at'])
+            ->map(fn ($a) => [
+                'assessment_id' => $a->id,
+                'overall_score' => $a->overall_score,
+                'date'          => $a->completed_at ?? $a->created_at,
             ])->values();
 
         $totalAssessments = Assessment::where('user_id', $user->id)
@@ -76,9 +99,34 @@ class DashboardController extends Controller
                 'pdf_ready' => $latestAssessment->pdf_ready,
                 'created_at' => $latestAssessment->created_at,
             ],
+            'improvement' => $improvement,
+            'strongest_pillar' => $strongest ? [
+                'pillar_ar' => $strongest->pillar_name_ar ?? $strongest->pillar->name_ar,
+                'pillar_en' => $strongest->pillar_name_en ?? $strongest->pillar->name_en,
+                'percentage' => $strongest->percentage,
+            ] : null,
+            'weakest_pillar' => $weakest ? [
+                'pillar_ar' => $weakest->pillar_name_ar ?? $weakest->pillar->name_ar,
+                'pillar_en' => $weakest->pillar_name_en ?? $weakest->pillar->name_en,
+                'percentage' => $weakest->percentage,
+            ] : null,
+            'score_trend' => $trendPoints,
             'radar_chart_data' => $radarChartData,
-            'strengths' => $strengths,
-            'weaknesses' => $weaknesses,
+            'strengths' => $pillarResults->where('is_weak', false)
+                ->sortByDesc('percentage')
+                ->take(2)
+                ->map(fn ($r) => [
+                    'pillar_ar' => $r->pillar->name_ar,
+                    'pillar_en' => $r->pillar->name_en,
+                    'percentage' => $r->percentage,
+                ])->values(),
+            'weaknesses' => $pillarResults->where('is_weak', true)
+                ->sortBy('percentage')
+                ->map(fn ($r) => [
+                    'pillar_ar' => $r->pillar->name_ar,
+                    'pillar_en' => $r->pillar->name_en,
+                    'percentage' => $r->percentage,
+                ])->values(),
             'ai_summary_ar' => $latestAssessment->ai_summary_ar,
             'total_assessments' => $totalAssessments,
             'expansion_areas_count' => $expansionAreasCount,
