@@ -29,13 +29,14 @@ class GeminiAssessmentChatService
      */
     public function ask(Assessment $assessment, string $question, array $history = []): array
     {
-        $apiKey = (string) config('gemini.api_key');
+        $settings = app(SiteSettingService::class);
+        $apiKey = $settings->geminiApiKey();
 
         if ($apiKey === '' || $apiKey === 'your_gemini_api_key_here') {
             return ['answer' => $this->ruleBasedAnswer($assessment, $question), 'fallback' => true];
         }
 
-        $model = (string) config('gemini.model', 'gemini-3.5-flash-lite');
+        $model = $settings->geminiModel();
         $context = $this->analysisService->buildContext($assessment);
         $approvedAnalysis = AiAnalysis::where('assessment_id', $assessment->id)
             ->whereIn('status', ['completed', 'approved'])

@@ -156,6 +156,7 @@ class AssessmentVersionManager
                     'text_en'               => $question->text_en,
                     'display_order'         => $question->display_order,
                     'weight'                => $questionWeight,
+                    'answer_type'           => $question->answer_type ?? 'likert',
                     'is_active'             => true,
                 ]);
             }

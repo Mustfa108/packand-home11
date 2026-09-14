@@ -15,10 +15,16 @@ class GeminiNlgService
 
     private string $apiUrl;
 
-    public function __construct()
+    public function __construct(private ?SiteSettingService $settings = null)
     {
-        $this->apiKey = (string) config('gemini.api_key');
-        $this->model = (string) config('gemini.model', 'gemini-2.0-flash');
+        $this->refreshCredentials();
+    }
+
+    private function refreshCredentials(): void
+    {
+        $settings = $this->settings ?? app(SiteSettingService::class);
+        $this->apiKey = $settings->geminiApiKey();
+        $this->model = $settings->geminiModel();
         $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent";
     }
 
@@ -131,14 +137,19 @@ PROMPT;
 {
   "score": 0,
   "level": "مبكر",
-  "summary": "ملخص من 3 جمل",
+  "summary": "ملخص قصير من 2 إلى 3 جمل",
+  "full_summary": "ملخص كامل للمشروع من 5 إلى 8 جمل يوضح الفكرة والمشكلة والمستفيدين والوضع الحالي",
+  "features": ["ميزة متوقعة للمشروع", "ميزة متوقعة"],
+  "ideal_steps": ["خطوة مثالية 1", "خطوة مثالية 2", "خطوة مثالية 3", "خطوة مثالية 4"],
   "strengths": ["نقطة قوة", "نقطة قوة"],
   "risks": ["مخاطرة قابلة للتحقق", "مخاطرة قابلة للتحقق"],
   "recommendations": ["إجراء عملي", "إجراء عملي", "إجراء عملي"],
   "kpis": ["مؤشر قياس مع طريقة متابعة", "مؤشر قياس"]
 }
 الدرجة من 0 إلى 100. استخدم مستوى واحداً فقط من: مبكر، قابل للتجربة، جاهز للنمو، متقدم.
-اجعل التوصيات قابلة للتنفيذ خلال 30 إلى 90 يوماً، واجعل مؤشرات القياس بسيطة.
+اجعل التوصيات وideal_steps قابلة للتنفيذ خلال 30 إلى 90 يوماً، واجعل مؤشرات القياس بسيطة.
+features تصف الميزات المتوقعة للمشروع عند نضجه.
+ideal_steps هي خارطة طريق مرتبة زمنياً.
 
 بيانات المشروع:
 الاسم: {$data['project_name']}
@@ -210,6 +221,9 @@ PROMPT;
             'score' => $score,
             'level' => $level,
             'summary' => (string) ($result['summary'] ?? ''),
+            'full_summary' => (string) ($result['full_summary'] ?? $result['summary'] ?? ''),
+            'features' => $this->stringList($result['features'] ?? [], 6),
+            'ideal_steps' => $this->stringList($result['ideal_steps'] ?? [], 8),
             'strengths' => $this->stringList($result['strengths'] ?? [], 4),
             'risks' => $this->stringList($result['risks'] ?? [], 4),
             'recommendations' => $this->stringList($result['recommendations'] ?? [], 5),
@@ -227,7 +241,20 @@ PROMPT;
         return [
             'score' => $score,
             'level' => $level,
-            'summary' => 'يعكس التقييم الحالي وضوحاً أولياً في فكرة المشروع، مع حاجة إلى تحويلها إلى نتائج قابلة للقياس وخطة تشغيل محددة. ترتفع الجاهزية كلما اكتملت بيانات الفئة المستفيدة والأنشطة والاستدامة. استخدم التوصيات التالية كخطوات تحقق عملية قبل التوسع.',
+            'summary' => 'يعكس التقييم الحالي وضوحاً أولياً في فكرة المشروع، مع حاجة إلى تحويلها إلى نتائج قابلة للقياس وخطة تشغيل محددة.',
+            'full_summary' => 'المشروع يعالج احتياجاً مجتمعياً مذكوراً في وصف المشكلة، ويستهدف فئة مستفيدة محددة عبر أنشطة أولية. الجاهزية الحالية تعتمد على اكتمال الفريق والتمويل وخطة الاستدامة. لرفع الجاهزية يلزم التحقق الميداني السريع، تجربة مصغرة، ومؤشرات أثر بسيطة مرتبطة بالمرحلة الحالية للمشروع.',
+            'features' => [
+                'خدمة أو تدخل واضح للمستفيدين',
+                'قابلية القياس عبر مؤشرات بسيطة',
+                'إمكانية التوسع الجغرافي عند نضج التشغيل',
+            ],
+            'ideal_steps' => [
+                'توثيق المشكلة والفئة المستفيدة بمقابلات قصيرة',
+                'تصميم تجربة أولية لمدة 30 يوماً',
+                'تحديد مسؤوليات الفريق والميزانية التشغيلية',
+                'قياس نتيجة واحدة رئيسية ومراجعة أسبوعية',
+                'بناء شراكة محلية واحدة داعمة للتوسع',
+            ],
             'strengths' => ['وجود مشكلة مجتمعية واضحة', 'إمكانية تحويل الأنشطة إلى تدخل قابل للقياس'],
             'risks' => ['عدم كفاية الأدلة على حجم الاحتياج', 'غياب مسؤوليات ومؤشرات زمنية محددة'],
             'recommendations' => ['نفّذ مقابلات قصيرة مع 5 مستفيدين للتحقق من المشكلة', 'حوّل النشاط الرئيسي إلى تجربة صغيرة لمدة 30 يوماً', 'عيّن مسؤولاً لكل نتيجة واكتب موعد المراجعة الأسبوعية'],
@@ -270,6 +297,8 @@ PROMPT;
 
     private function callGemini(string $prompt, int $maxOutputTokens = 1024): ?string
     {
+        $this->refreshCredentials();
+
         if ($this->apiKey === '' || $this->apiKey === 'your_gemini_api_key_here') {
             Log::channel('ai')->warning('Gemini API key missing; skipping AI call.');
 

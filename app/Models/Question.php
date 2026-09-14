@@ -17,6 +17,7 @@ class Question extends Model
         'text_en',
         'display_order',
         'weight',
+        'answer_type',
         'is_active',
         'used_in_assessments',
     ];
@@ -28,6 +29,11 @@ class Question extends Model
             'is_active'          => 'boolean',
             'used_in_assessments' => 'boolean',
         ];
+    }
+
+    public function isYesNo(): bool
+    {
+        return ($this->answer_type ?? 'likert') === 'yes_no';
     }
 
     public function version(): BelongsTo

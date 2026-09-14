@@ -24,10 +24,16 @@ class GeminiAssessmentAnalysisService
 
     private int $timeout;
 
-    public function __construct()
+    public function __construct(private ?SiteSettingService $settings = null)
     {
-        $this->apiKey = (string) config('gemini.api_key');
-        $this->model = (string) config('gemini.model', 'gemini-3.5-flash-lite');
+        $this->refreshCredentials();
+    }
+
+    private function refreshCredentials(): void
+    {
+        $settings = $this->settings ?? app(SiteSettingService::class);
+        $this->apiKey = $settings->geminiApiKey();
+        $this->model = $settings->geminiModel();
         $this->timeout = (int) config('gemini.timeout', 45);
         $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent";
     }
@@ -253,6 +259,8 @@ class GeminiAssessmentAnalysisService
 
     private function callGemini(array $context): ?string
     {
+        $this->refreshCredentials();
+
         if ($this->apiKey === '' || $this->apiKey === 'your_gemini_api_key_here') {
             Log::channel('ai')->warning('Gemini API key missing; assessment analysis falls back to rule-based.');
 

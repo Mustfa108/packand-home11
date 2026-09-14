@@ -39,6 +39,7 @@ class AdminQuestionController extends Controller
             'text_en'       => $question->text_en,
             'display_order' => $question->display_order,
             'weight'        => $question->weight,
+            'answer_type'   => $question->answer_type ?? 'likert',
             'is_active'     => $question->is_active,
             'used_in_assessments' => $question->used_in_assessments,
         ]);
@@ -67,6 +68,7 @@ class AdminQuestionController extends Controller
             'text_en'       => ['nullable', 'string', 'max:1000'],
             'display_order' => ['required', 'integer', 'min:0', 'max:255'],
             'weight'        => ['required', 'numeric', 'min:0', 'max:100'],
+            'answer_type'   => ['nullable', Rule::in(['likert', 'yes_no'])],
         ], [
             'pillar_id.required' => 'يجب ربط السؤال بمحور.',
             'pillar_id.exists'   => 'المحور المحدد غير موجود في هذا الإصدار.',
@@ -82,6 +84,7 @@ class AdminQuestionController extends Controller
             'text_en'               => $validated['text_en'] ?? null,
             'display_order'         => $validated['display_order'],
             'weight'                => $validated['weight'],
+            'answer_type'           => $validated['answer_type'] ?? 'likert',
             'is_active'             => true,
         ]);
 
@@ -112,6 +115,7 @@ class AdminQuestionController extends Controller
             'text_en'       => ['sometimes', 'nullable', 'string', 'max:1000'],
             'display_order' => ['sometimes', 'integer', 'min:0', 'max:255'],
             'weight'        => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'answer_type'   => ['sometimes', Rule::in(['likert', 'yes_no'])],
         ]);
 
         $question->update($validated);

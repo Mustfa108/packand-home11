@@ -55,6 +55,7 @@ class AssessmentController extends Controller
                     'text_en' => $q->text_en,
                     'display_order' => $q->display_order,
                     'weight' => $q->weight,
+                    'answer_type' => $q->answer_type ?? 'likert',
                 ]),
             ]),
         ];
@@ -148,8 +149,10 @@ class AssessmentController extends Controller
 
         $assessment->refresh();
 
-        ProcessAssessmentAI::dispatch($assessment)->onQueue('ai');
-        GenerateAssessmentPdf::dispatch($assessment)->onQueue('pdf');
+        // AI stays queued (may be slow). PDF runs after the HTTP response so it
+        // does not depend on a separately-named queue worker being online.
+        ProcessAssessmentAI::dispatch($assessment);
+        GenerateAssessmentPdf::dispatchAfterResponse($assessment);
 
         return ApiResponse::success(
             ['assessment_id' => $assessment->id],

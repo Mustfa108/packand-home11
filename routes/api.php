@@ -5,8 +5,10 @@ use App\Http\Controllers\Admin\AdminAssessmentController;
 use App\Http\Controllers\Admin\AdminAssessmentVersionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminAxisController;
+use App\Http\Controllers\Admin\AdminCommunityChatController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminQuestionController;
+use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\AdminStatisticsController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
@@ -14,18 +16,26 @@ use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PublicSettingsController;
 use App\Http\Controllers\User\ActionPlanItemController;
 use App\Http\Controllers\User\AiAnalysisController;
 use App\Http\Controllers\User\AssessmentController;
 use App\Http\Controllers\User\AssessmentResultController;
+use App\Http\Controllers\User\CommunityChatController;
 use App\Http\Controllers\User\DashboardController;
 use App\Http\Controllers\User\ExpansionAreaController;
 use App\Http\Controllers\User\OrganizationProfileController;
 use App\Http\Controllers\User\ProfileController;
+use App\Http\Controllers\User\ProjectMapController;
 use App\Http\Controllers\User\ProjectReviewController;
 use App\Http\Controllers\User\ReportController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
+
+Route::get('public/social-links', [PublicSettingsController::class, 'socialLinks']);
+
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 Route::prefix('auth')->name('auth.')->group(function () {
     Route::post('register', [RegisterController::class, 'register'])
@@ -83,6 +93,13 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/', [ProjectReviewController::class, 'store']);
         Route::get('{id}', [ProjectReviewController::class, 'show']);
         Route::post('{id}/chat', [ProjectReviewController::class, 'chat']);
+    });
+
+    Route::get('project-map', [ProjectMapController::class, 'index']);
+
+    Route::prefix('community-chat')->group(function () {
+        Route::get('messages', [CommunityChatController::class, 'index']);
+        Route::post('messages', [CommunityChatController::class, 'store']);
     });
 
     Route::prefix('assessment')->name('assessment.')->group(function () {
@@ -162,5 +179,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('ai-analyses/{id}', [AdminAiAnalysisController::class, 'show']);
         Route::post('ai-analyses/{id}/regenerate', [AdminAiAnalysisController::class, 'regenerate']);
         Route::patch('ai-analyses/{id}/review', [AdminAiAnalysisController::class, 'review']);
+
+        Route::get('settings/ai', [AdminSettingsController::class, 'showAi']);
+        Route::put('settings/ai', [AdminSettingsController::class, 'updateAi']);
+        Route::get('settings/social', [AdminSettingsController::class, 'showSocial']);
+        Route::put('settings/social', [AdminSettingsController::class, 'updateSocial']);
+
+        Route::get('community-chat/messages', [AdminCommunityChatController::class, 'index']);
+        Route::post('community-chat/messages', [AdminCommunityChatController::class, 'store']);
     });
 });

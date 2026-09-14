@@ -147,6 +147,85 @@
           "request": { "method": "PATCH", "url": "{{base}}/admin/ai-analyses/1/review", "body": { "mode": "raw", "raw": "{\n  \"decision\": \"approved\"\n}" } }
         }
       ]
+    },
+    {
+      "name": "Public & Settings",
+      "item": [
+        {
+          "name": "Public social links",
+          "request": { "method": "GET", "url": "{{base}}/public/social-links" },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// No auth. Returns only non-empty social URLs for footer."] } }]
+        },
+        { "name": "Admin get AI settings", "request": { "method": "GET", "url": "{{base}}/admin/settings/ai" } },
+        {
+          "name": "Admin update AI settings",
+          "request": {
+            "method": "PUT",
+            "url": "{{base}}/admin/settings/ai",
+            "body": { "mode": "raw", "raw": "{\n  \"gemini_api_key\": \"YOUR_KEY\",\n  \"gemini_model\": \"gemini-2.0-flash\"\n}" }
+          }
+        },
+        { "name": "Admin get social settings", "request": { "method": "GET", "url": "{{base}}/admin/settings/social" } },
+        {
+          "name": "Admin update social settings",
+          "request": {
+            "method": "PUT",
+            "url": "{{base}}/admin/settings/social",
+            "body": { "mode": "raw", "raw": "{\n  \"facebook\": \"https://facebook.com/...\",\n  \"whatsapp\": \"https://wa.me/963...\",\n  \"telegram\": \"https://t.me/...\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Community Chat",
+      "item": [
+        { "name": "List community messages", "request": { "method": "GET", "url": "{{base}}/community-chat/messages" } },
+        {
+          "name": "Send community message",
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/community-chat/messages",
+            "body": { "mode": "raw", "raw": "{\n  \"body\": \"مرحبا بالجميع\"\n}" }
+          }
+        },
+        { "name": "Admin list community messages", "request": { "method": "GET", "url": "{{base}}/admin/community-chat/messages" } },
+        {
+          "name": "Admin send community message",
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/admin/community-chat/messages",
+            "body": { "mode": "raw", "raw": "{\n  \"body\": \"رسالة من الإدارة\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Project Reviews & Map",
+      "item": [
+        { "name": "List my project reviews", "request": { "method": "GET", "url": "{{base}}/project-reviews" } },
+        {
+          "name": "Create project review (AI + optional map claim)",
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/project-reviews",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_name\": \"مبادرة تعليم\",\n  \"stage\": \"pilot\",\n  \"location\": \"دمشق\",\n  \"lat\": 33.5138,\n  \"lng\": 36.2765,\n  \"mission\": \"تحسين فرص التعلم للأطفال في المناطق المحرومة عبر نوادي قراءة أسبوعية.\",\n  \"problem\": \"ضعف الوصول إلى مواد تعليمية آمنة ومنتظمة للأطفال.\",\n  \"beneficiaries\": \"أطفال 8-12 سنة وأولياء أمورهم\",\n  \"activities\": \"جلسات قراءة جماعية وتدريب ميسرين محليين\",\n  \"impact\": \"رفع عدد الأطفال المشاركين شهرياً\",\n  \"sustainability\": \"شراكات محلية ورسوم رمزية اختيارية\"\n}"
+            }
+          },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// Response includes full_summary, features, ideal_steps, strengths, risks, recommendations, kpis.", "// lat/lng claims the pin for this user; nearby claimed pins by others return 422."] } }]
+        },
+        { "name": "Show project review", "request": { "method": "GET", "url": "{{base}}/project-reviews/1" } },
+        {
+          "name": "Project review AI chat",
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/project-reviews/1/chat",
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"ما أول خطوة هذا الأسبوع؟\"\n}" }
+          }
+        },
+        { "name": "Project map pins", "request": { "method": "GET", "url": "{{base}}/project-map" } }
+      ]
     }
   ],
   "variable": [
