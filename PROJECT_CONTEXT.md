@@ -10,7 +10,7 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 
 - Laravel 13 / PHP 8.3
 - Sanctum auth (users + admins)
-- DomPDF reports
+- **mPDF** reports (Arabic RTL) — replaced DomPDF generation path
 - Google Gemini (key from DB settings or `.env`)
 - Laravel Reverb for realtime community chat
 
@@ -18,13 +18,13 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 
 - Questionnaire = pillars + questions with `answer_type` (`likert` | `yes_no`)
 - Yes = score 5, No = score 1 (compatible with existing scoring)
-- PDF: `GenerateAssessmentPdf` runs **afterResponse without ShouldQueue** (no queue worker required for PDF)
+- PDF: `PdfReportService` uses mPDF + `dejavusans` + `directionality=rtl`
 - Manual PDF rebuild: `POST /api/report/{id}/regenerate`
 - AI jobs: `ProcessAssessmentAI` on default queue
 - Gemini credentials: `SiteSettingService` (admin panel) → fallback `GEMINI_API_KEY`
 - Community chat: `community_messages` + `CommunityMessageSent` on private channel `community-chat`
-- Project map: `project_reviews.lat/lng` + `is_claimed`
-- Project AI detail fields: `ai_goals`, `ai_how_it_works`, `ai_features`, `ai_full_summary_ar`, `ai_ideal_steps`
+- User model exposes `org_type_ar` / `org_size_ar` accessors (needed by organization profile API)
+- AI analysis gated until user has `org_type` + `org_size`
 
 ## Important endpoints (new/updated)
 
@@ -42,9 +42,10 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 
 ## Recent major changes (2026-09-14)
 
-- Fixed PDF stuck state by removing ShouldQueue from PDF job
-- Added PDF regenerate endpoint + frontend retry
-- Enriched project AI analysis with goals and how_it_works
+- Switched PDF generation from DomPDF to mPDF for correct Arabic RTL
+- Documented CORS env requirements in `config/cors.php`
+- Added User `org_type_ar` / `org_size_ar` accessors
+- Server ops prompt: `docs/server-fix-prompt.md`
 
 ## Run checklist
 
@@ -64,10 +65,12 @@ php artisan reverb:start
 - DB_*, `GEMINI_API_KEY`, `GEMINI_MODEL`
 - `BROADCAST_CONNECTION=reverb`
 - `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`, host/port/scheme
-- `FRONTEND_URL` for CORS
+- `FRONTEND_URL` (+ optional `FRONTEND_URL_ALT`) for CORS
 
 ## Known issues / decisions
 
 - Named queues `ai`/`pdf` removed from dispatch path for reliability; use default queue + afterResponse for PDF
 - `Message` model (1:1 DM) remains unused; community chat uses `community_messages`
 - Hoppscotch not present; Postman collection under `docs/postman_collection.json`
+- Realtime chat requires server DNS + TLS proxy for Reverb (see `docs/server-fix-prompt.md`)
+- DomPDF package may still be installed but generation path uses mPDF

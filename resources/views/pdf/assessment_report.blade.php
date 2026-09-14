@@ -3,80 +3,104 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  * { font-family: 'DejaVu Sans', 'Arial', sans-serif; direction: rtl; }
-  body { margin: 0; padding: 20px; color: #1a1a1a; font-size: 12px; line-height: 1.6; }
+  body {
+    font-family: dejavusans, sans-serif;
+    direction: rtl;
+    text-align: right;
+    color: #1a1a1a;
+    font-size: 12px;
+    line-height: 1.7;
+  }
 
   .header {
     background: #1e3a5f;
-    color: white;
-    padding: 20px;
+    color: #ffffff;
+    padding: 18px 16px;
     text-align: center;
-    border-radius: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
-  .header h1 { margin: 0; font-size: 22px; }
-  .header p  { margin: 5px 0 0; font-size: 12px; opacity: 0.85; }
+  .header h1 { margin: 0; font-size: 20px; }
+  .header p  { margin: 6px 0 0; font-size: 11px; }
 
   .section {
-    margin-bottom: 20px;
-    padding: 15px;
+    margin-bottom: 16px;
+    padding: 12px;
     border: 1px solid #e0e0e0;
-    border-radius: 6px;
   }
   .section-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: bold;
     color: #1e3a5f;
     border-bottom: 2px solid #1e3a5f;
-    padding-bottom: 6px;
-    margin-bottom: 12px;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
   }
 
   .score-box {
     text-align: center;
     background: #f0f4f8;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
+    padding: 14px;
+    margin-bottom: 12px;
   }
-  .score-number { font-size: 48px; font-weight: bold; color: #1e3a5f; }
+  .score-number { font-size: 42px; font-weight: bold; color: #1e3a5f; }
   .readiness-badge {
     display: inline-block;
-    padding: 4px 16px;
-    border-radius: 20px;
-    color: white;
+    padding: 4px 14px;
+    color: #ffffff;
     font-weight: bold;
-    font-size: 14px;
-    margin-top: 8px;
+    font-size: 13px;
+    margin-top: 6px;
   }
   .badge-low    { background: #dc2626; }
   .badge-medium { background: #d97706; }
   .badge-good   { background: #16a34a; }
 
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  th { background: #1e3a5f; color: white; padding: 8px; text-align: right; font-size: 11px; }
-  td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th {
+    background: #1e3a5f;
+    color: #ffffff;
+    padding: 7px;
+    text-align: right;
+    font-size: 11px;
+  }
+  td {
+    padding: 6px 7px;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 11px;
+    text-align: right;
+  }
   tr:nth-child(even) td { background: #f9fafb; }
   .weak-row td { background: #fff7ed; }
 
-  .phase-block { margin-bottom: 14px; }
-  .phase-title { font-weight: bold; color: #374151; margin-bottom: 5px; font-size: 12px; }
-  .phase-item  { padding: 6px 10px; background: #f3f4f6; border-radius: 4px; margin-bottom: 4px; font-size: 11px; }
+  .phase-block { margin-bottom: 12px; }
+  .phase-title { font-weight: bold; color: #374151; margin-bottom: 4px; font-size: 12px; }
+  .phase-item  { padding: 6px 9px; background: #f3f4f6; margin-bottom: 4px; font-size: 11px; }
   .kpi-text    { color: #6b7280; font-size: 10px; margin-top: 3px; }
 
-  .footer { text-align: center; color: #9ca3af; font-size: 10px; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
-  .summary-text { background: #eff6ff; padding: 12px; border-radius: 6px; color: #1e40af; font-size: 11px; line-height: 1.7; }
+  .footer {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 10px;
+    margin-top: 24px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 8px;
+  }
+  .summary-text {
+    background: #eff6ff;
+    padding: 10px;
+    color: #1e40af;
+    font-size: 11px;
+    line-height: 1.8;
+  }
 </style>
 </head>
 <body>
 
-{{-- HEADER --}}
 <div class="header">
   <h1>HumaScale — تقرير تقييم الاستعداد للنمو</h1>
   <p>{{ $assessment->user->name }} | {{ $assessment->user->organization_name ?? 'غير محدد' }} | {{ $assessment->created_at->format('Y/m/d') }}</p>
 </div>
 
-{{-- SECTION 1: Overall Score --}}
 <div class="section">
   <div class="section-title">النتيجة الإجمالية</div>
   <div class="score-box">
@@ -93,7 +117,6 @@
   @endif
 </div>
 
-{{-- SECTION 2: Pillar Results --}}
 <div class="section">
   <div class="section-title">نتائج المحاور الستة</div>
   <table>
@@ -125,7 +148,6 @@
   </table>
 </div>
 
-{{-- SECTION 3: Action Plan --}}
 @if($assessment->actionPlan)
 <div class="section">
   <div class="section-title">خطة التطوير الموجَّهة</div>

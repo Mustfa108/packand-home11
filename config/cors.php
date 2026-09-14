@@ -1,5 +1,14 @@
 <?php
 
+/**
+ * CORS configuration for the SPA.
+ *
+ * Production checklist:
+ * - Set FRONTEND_URL to the exact SPA origin (scheme + host + optional port).
+ * - Optionally set FRONTEND_URL_ALT for a second origin (staging / www).
+ * - Paths include api/* and broadcasting/* for Echo auth.
+ * - After changing .env run: php artisan config:clear
+ */
 return [
 
     'paths' => ['api/*', 'sanctum/csrf-cookie', 'broadcasting/*'],

@@ -58,4 +58,25 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasOne(Assessment::class)->latestOfMany()->where('status', 'completed');
     }
+
+    public function getOrgTypeArAttribute(): string
+    {
+        return match ($this->org_type) {
+            'civil_society'  => 'منظمة مجتمع مدني',
+            'volunteer_team' => 'فريق تطوعي',
+            'startup'        => 'مشروع ناشئ',
+            'other'          => 'أخرى',
+            default          => 'غير محدد',
+        };
+    }
+
+    public function getOrgSizeArAttribute(): string
+    {
+        return match ($this->org_size) {
+            'small'  => 'صغيرة',
+            'medium' => 'متوسطة',
+            'large'  => 'كبيرة',
+            default  => 'غير محدد',
+        };
+    }
 }
