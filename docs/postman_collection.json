@@ -213,7 +213,7 @@
               "raw": "{\n  \"project_name\": \"مبادرة تعليم\",\n  \"stage\": \"pilot\",\n  \"location\": \"دمشق\",\n  \"lat\": 33.5138,\n  \"lng\": 36.2765,\n  \"mission\": \"تحسين فرص التعلم للأطفال في المناطق المحرومة عبر نوادي قراءة أسبوعية.\",\n  \"problem\": \"ضعف الوصول إلى مواد تعليمية آمنة ومنتظمة للأطفال.\",\n  \"beneficiaries\": \"أطفال 8-12 سنة وأولياء أمورهم\",\n  \"activities\": \"جلسات قراءة جماعية وتدريب ميسرين محليين\",\n  \"impact\": \"رفع عدد الأطفال المشاركين شهرياً\",\n  \"sustainability\": \"شراكات محلية ورسوم رمزية اختيارية\"\n}"
             }
           },
-          "event": [{ "listen": "prerequest", "script": { "exec": ["// Response includes full_summary, features, ideal_steps, strengths, risks, recommendations, kpis.", "// lat/lng claims the pin for this user; nearby claimed pins by others return 422."] } }]
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// Response includes full_summary, goals, features, how_it_works, ideal_steps, strengths, risks, recommendations, kpis.", "// lat/lng claims the pin for this user; nearby claimed pins by others return 422."] } }]
         },
         { "name": "Show project review", "request": { "method": "GET", "url": "{{base}}/project-reviews/1" } },
         {
@@ -225,6 +225,18 @@
           }
         },
         { "name": "Project map pins", "request": { "method": "GET", "url": "{{base}}/project-map" } }
+      ]
+    },
+    {
+      "name": "PDF Report",
+      "item": [
+        { "name": "PDF status", "request": { "method": "GET", "url": "{{base}}/report/1/status" } },
+        { "name": "Download PDF", "request": { "method": "GET", "url": "{{base}}/report/1/download" } },
+        {
+          "name": "Regenerate PDF",
+          "request": { "method": "POST", "url": "{{base}}/report/1/regenerate" },
+          "event": [{ "listen": "prerequest", "script": { "exec": ["// Sync rebuild for assessment owner. No queue worker required.", "// Returns pdf_ready=true on success."] } }]
+        }
       ]
     }
   ],

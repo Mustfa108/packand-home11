@@ -90,6 +90,8 @@ class ProjectReviewController extends Controller
                 'ai_recommendations' => $evaluation['recommendations'],
                 'ai_kpis' => $evaluation['kpis'],
                 'ai_features' => $evaluation['features'] ?? [],
+                'ai_goals' => $evaluation['goals'] ?? [],
+                'ai_how_it_works' => $evaluation['how_it_works'] ?? [],
                 'ai_ideal_steps' => $evaluation['ideal_steps'] ?? [],
                 'ai_generated_at' => now(),
             ]);
@@ -175,7 +177,9 @@ class ProjectReviewController extends Controller
             'impact' => $review->impact,
             'sustainability' => $review->sustainability,
             'full_summary' => $review->ai_full_summary_ar,
+            'goals' => $review->ai_goals ?? [],
             'features' => $review->ai_features ?? [],
+            'how_it_works' => $review->ai_how_it_works ?? [],
             'ideal_steps' => $review->ai_ideal_steps ?? [],
             'strengths' => $review->ai_strengths ?? [],
             'risks' => $review->ai_risks ?? [],

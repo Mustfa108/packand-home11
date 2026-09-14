@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT — HumaScale Backend (`packand-home11`)
 
-**Last Updated:** 2026-09-13
+**Last Updated:** 2026-09-14
 
 ## Overview
 
@@ -18,11 +18,13 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 
 - Questionnaire = pillars + questions with `answer_type` (`likert` | `yes_no`)
 - Yes = score 5, No = score 1 (compatible with existing scoring)
-- PDF generated via `GenerateAssessmentPdf::dispatchAfterResponse` (does not need named `pdf` queue)
+- PDF: `GenerateAssessmentPdf` runs **afterResponse without ShouldQueue** (no queue worker required for PDF)
+- Manual PDF rebuild: `POST /api/report/{id}/regenerate`
 - AI jobs: `ProcessAssessmentAI` on default queue
 - Gemini credentials: `SiteSettingService` (admin panel) → fallback `GEMINI_API_KEY`
 - Community chat: `community_messages` + `CommunityMessageSent` on private channel `community-chat`
 - Project map: `project_reviews.lat/lng` + `is_claimed`
+- Project AI detail fields: `ai_goals`, `ai_how_it_works`, `ai_features`, `ai_full_summary_ar`, `ai_ideal_steps`
 
 ## Important endpoints (new/updated)
 
@@ -34,8 +36,15 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 | GET/POST | `/api/community-chat/messages` | User community chat |
 | GET/POST | `/api/admin/community-chat/messages` | Admin community chat |
 | GET | `/api/project-map` | Claimed/available project pins |
-| POST | `/api/project-reviews` | Accepts `lat`/`lng`, returns features + ideal_steps |
+| POST | `/api/project-reviews` | Returns goals, features, how_it_works, ideal_steps |
+| POST | `/api/report/{id}/regenerate` | Sync PDF rebuild for owner |
 | POST | `/api/broadcasting/auth` | Echo channel auth |
+
+## Recent major changes (2026-09-14)
+
+- Fixed PDF stuck state by removing ShouldQueue from PDF job
+- Added PDF regenerate endpoint + frontend retry
+- Enriched project AI analysis with goals and how_it_works
 
 ## Run checklist
 

@@ -136,6 +136,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::prefix('report')->group(function () {
         Route::get('{assessment_id}/download', [ReportController::class, 'download']);
         Route::get('{assessment_id}/status', [ReportController::class, 'status']);
+        Route::post('{assessment_id}/regenerate', [ReportController::class, 'regenerate']);
     });
 
     Route::prefix('notifications')->group(function () {

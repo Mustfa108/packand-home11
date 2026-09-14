@@ -37,6 +37,8 @@ class ProjectReview extends Model
         'ai_recommendations',
         'ai_kpis',
         'ai_features',
+        'ai_goals',
+        'ai_how_it_works',
         'ai_ideal_steps',
         'ai_generated_at',
     ];
@@ -55,6 +57,8 @@ class ProjectReview extends Model
             'ai_recommendations' => 'array',
             'ai_kpis' => 'array',
             'ai_features' => 'array',
+            'ai_goals' => 'array',
+            'ai_how_it_works' => 'array',
             'ai_ideal_steps' => 'array',
             'ai_generated_at' => 'datetime',
         ];

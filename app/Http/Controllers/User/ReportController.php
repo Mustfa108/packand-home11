@@ -5,10 +5,13 @@ namespace App\Http\Controllers\User;
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
+use App\Services\PdfReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 class ReportController extends Controller
 {
@@ -54,5 +57,40 @@ class ReportController extends Controller
             'ai_ready' => $assessment->ai_ready,
             'download_via' => 'GET /api/report/{assessment_id}/download',
         ], 'تم تحميل حالة التقرير.');
+    }
+
+    /**
+     * Regenerate the PDF synchronously for the assessment owner.
+     */
+    public function regenerate(Request $request, int $assessment_id, PdfReportService $pdfService): JsonResponse
+    {
+        $user = $request->user();
+        $assessment = Assessment::findOrFail($assessment_id);
+
+        if ($user->cannot('view', $assessment)) {
+            return ApiResponse::error('غير مصرح لك بإعادة توليد هذا التقرير.', 403);
+        }
+
+        if ($assessment->status !== 'completed') {
+            return ApiResponse::error('يجب اكتمال التقييم قبل توليد التقرير.', 422);
+        }
+
+        try {
+            $path = $pdfService->generate($assessment);
+            $assessment->update(['pdf_path' => $path]);
+
+            return ApiResponse::success([
+                'assessment_id' => $assessment->id,
+                'pdf_ready' => true,
+                'pdf_path' => $path,
+            ], 'تم تجهيز تقرير PDF بنجاح.');
+        } catch (Throwable $e) {
+            Log::error('PDF regenerate failed', [
+                'assessment_id' => $assessment->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error('تعذّر توليد تقرير PDF. حاول مرة أخرى.', 500);
+        }
     }
 }
