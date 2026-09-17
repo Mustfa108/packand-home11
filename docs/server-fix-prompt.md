@@ -17,6 +17,7 @@ APP_URL=https://YOUR_API_ORIGIN
 ```
 
 مهم:
+
 - القيمة يجب أن تطابق أصل الفرونت تماماً (scheme + host + port إن وُجد).
 - بدون slash في النهاية.
 
@@ -71,12 +72,14 @@ php artisan queue:failed
 ## 3) Reverb / WebSocket (دردشة المجتمع الفورية)
 
 المشكلة الشائعة الحالية:
-- الفرونت يتصل بـ `reverbhuma.sci-syria.org` على المنفذ 80
+
+- الفرونت يتصل بـ `reverb.sci-syria.org` على المنفذ 80
 - عملية Reverb تستمع داخلياً على 8080
 - DNS للنطاق غير معروف أو لا يوجد Proxy/SSL
 
 اضبط DNS:
-- سجل A/AAAA لـ `reverbhuma.sci-syria.org` (أو النطاق الذي تستخدمه) يشير لسيرفر التطبيق.
+
+- سجل A/AAAA لـ `reverb.sci-syria.org` (أو النطاق الذي تستخدمه) يشير لسيرفر التطبيق.
 
 في `.env` الباك:
 
@@ -85,7 +88,7 @@ BROADCAST_CONNECTION=reverb
 REVERB_APP_ID=humascale
 REVERB_APP_KEY=humascale-reverb-key
 REVERB_APP_SECRET=humascale-reverb-secret
-REVERB_HOST=reverbhuma.sci-syria.org
+REVERB_HOST=reverb.sci-syria.org
 REVERB_PORT=443
 REVERB_SCHEME=https
 REVERB_SERVER_HOST=0.0.0.0
@@ -99,6 +102,7 @@ php artisan reverb:start --host=0.0.0.0 --port=8080
 ```
 
 أضف Proxy في Nginx/Caddy:
+
 - المنفذ العام 443 (WSS) يوجّه إلى `127.0.0.1:8080`
 - فعّل WebSocket upgrade headers
 - ثبّت شهادة SSL للنطاق
@@ -108,7 +112,7 @@ php artisan reverb:start --host=0.0.0.0 --port=8080
 ```env
 VITE_API_BASE_URL=https://YOUR_API_ORIGIN/api
 VITE_REVERB_APP_KEY=humascale-reverb-key
-VITE_REVERB_HOST=reverbhuma.sci-syria.org
+VITE_REVERB_HOST=reverb.sci-syria.org
 VITE_REVERB_PORT=443
 VITE_REVERB_SCHEME=https
 ```
