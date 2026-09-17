@@ -46,15 +46,27 @@ GEMINI_API_KEY=YOUR_REAL_KEY
 GEMINI_MODEL=gemini-2.0-flash
 ```
 
-أو ضع المفتاح من لوحة الأدمن: `/admin/settings`.
+أو ضع المفتاح من لوحة الأدمن: `/admin/settings/ai`.
 
-شغّل Queue Worker عبر Supervisor:
+الأولوية في الكود: قيمة `SiteSettingService` (لوحة الأدمن) إن وُجدت وغير فارغة، وإلا `GEMINI_API_KEY` من `.env`. تأكد أن القيمتين غير متعارضتين (مفتاح منتهٍ في الأدمن يحجب المفتاح الصحيح في `.env`).
+
+شغّل Queue Worker بشكل مستمر عبر Supervisor أو systemd (وليس يدوياً ينقطع):
 
 ```bash
 php artisan queue:work --sleep=1 --tries=3 --timeout=120
 ```
 
-بدون `queue:work` لن يكتمل الملخص الذكي بعد التقييم.
+بدون `queue:work` لن يكتمل **الملخص الذكي** بعد التقييم (`ProcessAssessmentAI`).
+«التحليل الذكي» و«اسأل عن نتيجتك» متزامنان ولا يعتمدان على الطابور، لكنهما يحتاجان مفتاح Gemini وبروفيل منظمة مكتمل (`org_type` + `org_size`) للتحليل.
+
+تحقق من المهام الفاشلة:
+
+```bash
+php artisan queue:failed
+```
+
+راجع `storage/logs/laravel.log` لأي استثناءات Gemini / `ProcessAssessmentAI` / `project-reviews`.
+تأكد أن السيرفر يصل لـ Gemini API (لا حجب firewall/DNS)، وأن المفتاح غير محظور أو منتهٍ، وأن حدود Rate Limiting من Google غير مستنفدة.
 
 ## 3) Reverb / WebSocket (دردشة المجتمع الفورية)
 
