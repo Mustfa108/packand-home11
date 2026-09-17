@@ -61,6 +61,7 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 
 ## Recent major changes
 
+- 2026-09-17: Gemini failure logs now include model, Google `error.message` / status, and truncated body (chat + analysis + NLG)
 - 2026-09-17: API 500 handler returns Arabic JSON; AI analysis/project review catch exceptions and persist fallback when possible
 - 2026-09-17: Default `GEMINI_TIMEOUT` reduced to 25s; `persistFallback()` on `GeminiAssessmentAnalysisService`
 - 2026-09-17: Project review `ai_is_fallback` column + hardened Gemini JSON parse (`responseMimeType`, higher tokens)

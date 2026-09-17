@@ -339,9 +339,18 @@ PROMPT;
             $duration = round((microtime(true) - $startTime) * 1000);
 
             if ($response->failed()) {
+                $json = $response->json();
+                $error = is_array($json) ? ($json['error'] ?? null) : null;
+
                 Log::channel('ai')->error('Gemini assessment analysis request failed', [
-                    'status'   => $response->status(),
-                    'duration' => "{$duration}ms",
+                    'model'         => $this->model,
+                    'status'        => $response->status(),
+                    'duration'      => "{$duration}ms",
+                    'error_code'    => is_array($error) ? ($error['code'] ?? null) : null,
+                    'error_status'  => is_array($error) ? ($error['status'] ?? null) : null,
+                    'error_message' => is_array($error) ? ($error['message'] ?? null) : null,
+                    'error_details' => is_array($error) ? ($error['details'] ?? null) : null,
+                    'body_preview'  => mb_substr($response->body(), 0, 2000),
                 ]);
 
                 return null;

@@ -94,10 +94,12 @@ PROMPT;
             $duration = round((microtime(true) - $startTime) * 1000);
 
             if ($response->failed()) {
-                Log::channel('ai')->error('Gemini chat request failed', [
-                    'status'   => $response->status(),
-                    'duration' => "{$duration}ms",
-                ]);
+                Log::channel('ai')->error('Gemini chat request failed', $this->geminiFailureContext(
+                    $response,
+                    $model,
+                    $duration,
+                    $assessment->id
+                ));
 
                 return ['answer' => $this->ruleBasedAnswer($assessment, $question), 'fallback' => true];
             }
@@ -105,17 +107,63 @@ PROMPT;
             $text = $response->json('candidates.0.content.parts.0.text');
 
             if (! $text) {
+                Log::channel('ai')->warning('Gemini chat empty response', [
+                    'assessment_id'   => $assessment->id,
+                    'model'           => $model,
+                    'duration'        => "{$duration}ms",
+                    'finish_reason'   => $response->json('candidates.0.finishReason'),
+                    'block_reason'    => $response->json('promptFeedback.blockReason'),
+                    'safety_ratings'  => $response->json('candidates.0.safetyRatings'),
+                    'body_preview'    => mb_substr($response->body(), 0, 1500),
+                ]);
+
                 return ['answer' => $this->ruleBasedAnswer($assessment, $question), 'fallback' => true];
             }
 
-            Log::channel('ai')->info('Gemini chat success', ['duration' => "{$duration}ms"]);
+            Log::channel('ai')->info('Gemini chat success', [
+                'assessment_id' => $assessment->id,
+                'model'         => $model,
+                'duration'      => "{$duration}ms",
+            ]);
 
             return ['answer' => trim($text), 'fallback' => false];
         } catch (\Throwable $e) {
-            Log::channel('ai')->error('Gemini chat exception', ['message' => $e->getMessage()]);
+            Log::channel('ai')->error('Gemini chat exception', [
+                'assessment_id' => $assessment->id,
+                'model'         => $model,
+                'message'       => $e->getMessage(),
+                'exception'     => $e::class,
+            ]);
 
             return ['answer' => $this->ruleBasedAnswer($assessment, $question), 'fallback' => true];
         }
+    }
+
+    /**
+     * Build a safe, detailed log context for Gemini HTTP failures (no API key).
+     *
+     * @return array<string, mixed>
+     */
+    private function geminiFailureContext(
+        \Illuminate\Http\Client\Response $response,
+        string $model,
+        float $duration,
+        int $assessmentId
+    ): array {
+        $json = $response->json();
+        $error = is_array($json) ? ($json['error'] ?? null) : null;
+
+        return [
+            'assessment_id'   => $assessmentId,
+            'model'           => $model,
+            'status'          => $response->status(),
+            'duration'        => "{$duration}ms",
+            'error_code'      => is_array($error) ? ($error['code'] ?? null) : null,
+            'error_status'    => is_array($error) ? ($error['status'] ?? null) : null,
+            'error_message'   => is_array($error) ? ($error['message'] ?? null) : null,
+            'error_details'   => is_array($error) ? ($error['details'] ?? null) : null,
+            'body_preview'    => mb_substr($response->body(), 0, 2000),
+        ];
     }
 
     /**
