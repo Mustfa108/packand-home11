@@ -21,7 +21,7 @@ class GeminiService
     {
         $this->apiKey = (string) config('ai.gemini_api_key', '');
         $this->model = (string) config('ai.gemini_model', 'gemini-2.0-flash');
-        $this->timeout = (int) config('ai.gemini_timeout', 45);
+        $this->timeout = (int) config('ai.gemini_timeout', 25);
     }
 
     /**

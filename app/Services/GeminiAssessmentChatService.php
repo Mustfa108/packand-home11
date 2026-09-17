@@ -80,7 +80,7 @@ PROMPT;
         $startTime = microtime(true);
 
         try {
-            $response = Http::timeout((int) config('gemini.timeout', 45))
+            $response = Http::timeout((int) config('gemini.timeout', 25))
                 ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}", [
                     'contents' => [
                         ['parts' => [['text' => $prompt]]],

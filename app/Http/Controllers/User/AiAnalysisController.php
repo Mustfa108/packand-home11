@@ -11,6 +11,7 @@ use App\Services\GeminiAssessmentAnalysisService;
 use App\Services\GeminiAssessmentChatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 
 class AiAnalysisController extends Controller
@@ -42,7 +43,36 @@ class AiAnalysisController extends Controller
             return ApiResponse::error('تم تجاوز الحد المسموح لطلبات التحليل الذكي لهذا اليوم. حاول غداً.', 429);
         }
 
-        $analysis = $analysisService->generate($assessment);
+        @set_time_limit(120);
+
+        try {
+            $analysis = $analysisService->generate($assessment);
+        } catch (\Throwable $e) {
+            Log::channel('ai')->error('AI analysis generation failed', [
+                'assessment_id' => $assessment->id,
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            try {
+                $analysis = $analysisService->persistFallback(
+                    $assessment,
+                    'تعذر إنشاء التحليل الذكي بسبب خطأ في الخادم.'
+                );
+            } catch (\Throwable $fallbackError) {
+                Log::channel('ai')->error('AI analysis fallback persist failed', [
+                    'assessment_id' => $assessment->id,
+                    'error' => $fallbackError->getMessage(),
+                ]);
+
+                return ApiResponse::error(
+                    'تعذر إنشاء التحليل الذكي بسبب خطأ في الخادم. يمكنك المحاولة لاحقاً.',
+                    503,
+                    null,
+                    'ai_generation_failed'
+                );
+            }
+        }
 
         return ApiResponse::success($this->payload($analysis), 'تم إنشاء التحليل الذكي بنجاح.');
     }
@@ -90,6 +120,8 @@ class AiAnalysisController extends Controller
             return ApiResponse::error('تم تجاوز الحد المسموح لعدد الرسائل اليوم. حاول غداً.', 429);
         }
 
+        @set_time_limit(120);
+
         $history = AiChatMessage::where('assessment_id', $assessment->id)
             ->where('user_id', $request->user()->id)
             ->orderBy('created_at')
@@ -104,7 +136,22 @@ class AiAnalysisController extends Controller
             'content'       => $validated['message'],
         ]);
 
-        $result = $chatService->ask($assessment, $validated['message'], $history);
+        try {
+            $result = $chatService->ask($assessment, $validated['message'], $history);
+        } catch (\Throwable $e) {
+            Log::channel('ai')->error('AI chat failed', [
+                'assessment_id' => $assessment->id,
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error(
+                'تعذر الرد على سؤالك حالياً بسبب خطأ في الخادم. حاول لاحقاً.',
+                503,
+                null,
+                'ai_chat_failed'
+            );
+        }
 
         AiChatMessage::create([
             'assessment_id' => $assessment->id,

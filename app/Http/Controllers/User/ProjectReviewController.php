@@ -6,9 +6,11 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\ProjectReview;
 use App\Services\GeminiNlgService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProjectReviewController extends Controller
 {
@@ -71,32 +73,69 @@ class ProjectReviewController extends Controller
             }
         }
 
-        $evaluation = $ai->evaluateProject($validated);
+        @set_time_limit(120);
 
-        $review = DB::transaction(function () use ($request, $validated, $evaluation) {
-            $hasCoords = isset($validated['lat'], $validated['lng']);
+        try {
+            $evaluation = $ai->evaluateProject($validated);
 
-            return ProjectReview::create([
-                ...$validated,
+            $review = DB::transaction(function () use ($request, $validated, $evaluation) {
+                $hasCoords = isset($validated['lat'], $validated['lng']);
+
+                return ProjectReview::create([
+                    ...$validated,
+                    'user_id' => $request->user()->id,
+                    'is_claimed' => $hasCoords,
+                    'is_public_on_map' => $validated['is_public_on_map'] ?? true,
+                    'ai_score' => $evaluation['score'],
+                    'ai_level' => $evaluation['level'],
+                    'ai_summary_ar' => $evaluation['summary'],
+                    'ai_full_summary_ar' => $evaluation['full_summary'] ?? $evaluation['summary'],
+                    'ai_strengths' => $evaluation['strengths'],
+                    'ai_risks' => $evaluation['risks'],
+                    'ai_recommendations' => $evaluation['recommendations'],
+                    'ai_kpis' => $evaluation['kpis'],
+                    'ai_features' => $evaluation['features'] ?? [],
+                    'ai_goals' => $evaluation['goals'] ?? [],
+                    'ai_how_it_works' => $evaluation['how_it_works'] ?? [],
+                    'ai_ideal_steps' => $evaluation['ideal_steps'] ?? [],
+                    'ai_generated_at' => now(),
+                    'ai_is_fallback' => (bool) ($evaluation['is_fallback'] ?? false),
+                ]);
+            });
+        } catch (QueryException $e) {
+            Log::channel('ai')->error('Project review persist failed', [
                 'user_id' => $request->user()->id,
-                'is_claimed' => $hasCoords,
-                'is_public_on_map' => $validated['is_public_on_map'] ?? true,
-                'ai_score' => $evaluation['score'],
-                'ai_level' => $evaluation['level'],
-                'ai_summary_ar' => $evaluation['summary'],
-                'ai_full_summary_ar' => $evaluation['full_summary'] ?? $evaluation['summary'],
-                'ai_strengths' => $evaluation['strengths'],
-                'ai_risks' => $evaluation['risks'],
-                'ai_recommendations' => $evaluation['recommendations'],
-                'ai_kpis' => $evaluation['kpis'],
-                'ai_features' => $evaluation['features'] ?? [],
-                'ai_goals' => $evaluation['goals'] ?? [],
-                'ai_how_it_works' => $evaluation['how_it_works'] ?? [],
-                'ai_ideal_steps' => $evaluation['ideal_steps'] ?? [],
-                'ai_generated_at' => now(),
-                'ai_is_fallback' => (bool) ($evaluation['is_fallback'] ?? false),
+                'error' => $e->getMessage(),
             ]);
-        });
+
+            if (str_contains($e->getMessage(), 'ai_is_fallback')) {
+                return ApiResponse::error(
+                    'تعذر حفظ تقييم المشروع. يجب تطبيق ترحيل قاعدة البيانات الخاص بعمود الذكاء الاصطناعي على الخادم.',
+                    503,
+                    null,
+                    'migration_missing'
+                );
+            }
+
+            return ApiResponse::error(
+                'تعذر حفظ تقييم المشروع بسبب خطأ في قاعدة البيانات.',
+                503,
+                null,
+                'db_error'
+            );
+        } catch (\Throwable $e) {
+            Log::channel('ai')->error('Project review generation failed', [
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error(
+                'تعذر تحليل المشروع بسبب خطأ في الخادم. حاول لاحقاً.',
+                503,
+                null,
+                'ai_generation_failed'
+            );
+        }
 
         return ApiResponse::success($this->details($review), 'تم تحليل المشروع بنجاح.', 201);
     }
@@ -128,7 +167,24 @@ class ProjectReviewController extends Controller
             'content' => $validated['message'],
         ]);
 
-        $answer = $ai->chatAboutProject($review, $validated['message'], $history);
+        @set_time_limit(120);
+
+        try {
+            $answer = $ai->chatAboutProject($review, $validated['message'], $history);
+        } catch (\Throwable $e) {
+            Log::channel('ai')->error('Project review chat failed', [
+                'review_id' => $review->id,
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error(
+                'تعذر الرد على سؤالك حالياً بسبب خطأ في الخادم. حاول لاحقاً.',
+                503,
+                null,
+                'ai_chat_failed'
+            );
+        }
         $review->messages()->create([
             'role' => 'assistant',
             'content' => $answer,

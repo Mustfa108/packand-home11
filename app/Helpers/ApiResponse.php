@@ -16,11 +16,25 @@ class ApiResponse
         return response()->json($response, $status);
     }
 
-    public static function error(string $message, int $status = 422, mixed $errors = null): JsonResponse
+    /**
+     * Return a structured API error payload.
+     *
+     * @param  array<string, mixed>|null  $errors
+     * @param  string|null  $errorCode  Stable machine-readable code for the frontend
+     */
+    public static function error(
+        string $message,
+        int $status = 422,
+        mixed $errors = null,
+        ?string $errorCode = null
+    ): JsonResponse
     {
         $response = ['success' => false, 'message' => $message];
         if (!is_null($errors)) {
             $response['errors'] = $errors;
+        }
+        if ($errorCode !== null) {
+            $response['error_code'] = $errorCode;
         }
         return response()->json($response, $status);
     }

@@ -390,7 +390,7 @@ PROMPT;
                 $generationConfig['responseMimeType'] = 'application/json';
             }
 
-            $response = Http::timeout(60)
+            $response = Http::timeout((int) config('gemini.timeout', 25))
                 ->post("{$this->apiUrl}?key={$this->apiKey}", [
                     'contents' => [
                         [

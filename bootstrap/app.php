@@ -4,8 +4,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -58,5 +58,32 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => 'غير مصرح لك بالوصول إلى هذا المورد.',
                 ], 403);
             }
+        });
+
+        $exceptions->renderable(function (\Throwable $e, Request $request) {
+            if (! $request->expectsJson() && ! $request->is('api/*')) {
+                return null;
+            }
+
+            if (
+                $e instanceof \Illuminate\Validation\ValidationException
+                || $e instanceof \Illuminate\Auth\AuthenticationException
+                || $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException
+                || $e instanceof HttpExceptionInterface
+            ) {
+                return null;
+            }
+
+            Log::error('Unhandled API exception', [
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+                'url' => $request->fullUrl(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ داخلي في الخادم. يرجى المحاولة لاحقاً.',
+                'error_code' => 'server_error',
+            ], 500);
         });
     })->create();

@@ -34,7 +34,7 @@ class GeminiAssessmentAnalysisService
         $settings = $this->settings ?? app(SiteSettingService::class);
         $this->apiKey = $settings->geminiApiKey();
         $this->model = $settings->geminiModel();
-        $this->timeout = (int) config('gemini.timeout', 45);
+        $this->timeout = (int) config('gemini.timeout', 25);
         $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent";
     }
 
@@ -88,28 +88,29 @@ class GeminiAssessmentAnalysisService
     public function generate(Assessment $assessment): AiAnalysis
     {
         $startedAt = microtime(true);
-        $context = $this->buildContext($assessment);
-        $rules = app(RuleBasedRecommendationService::class);
+        $responseText = null;
+        $data = null;
 
-        $responseText = $this->callGemini($context);
-
-        $data = $responseText ? $this->parseAndValidate($responseText) : null;
+        try {
+            $responseText = $this->callGemini($this->buildContext($assessment));
+            $data = $responseText ? $this->parseAndValidate($responseText) : null;
+        } catch (\Throwable $e) {
+            Log::channel('ai')->error('Gemini assessment analysis generate exception', [
+                'assessment_id' => $assessment->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
 
         $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
 
         if ($data === null) {
-            return AiAnalysis::create([
-                'assessment_id' => $assessment->id,
-                'model'         => $this->model,
-                'prompt_version' => self::PROMPT_VERSION,
-                'response_json' => $this->fallbackPayload($assessment, $context),
-                'status'        => 'completed',
-                'is_fallback'   => true,
-                'error_message' => $responseText === null
+            return $this->persistFallback(
+                $assessment,
+                $responseText === null
                     ? 'تعذر الاتصال بخدمة الذكاء الاصطناعي.'
                     : 'تعذر التحقق من صحة استجابة الذكاء الاصطناعي.',
-                'duration_ms'   => $durationMs,
-            ]);
+                $durationMs
+            );
         }
 
         return AiAnalysis::create([
@@ -119,6 +120,34 @@ class GeminiAssessmentAnalysisService
             'response_json'  => $data,
             'status'         => 'completed',
             'is_fallback'    => false,
+            'duration_ms'    => $durationMs,
+        ]);
+    }
+
+    /**
+     * Persist a rule-based analysis when Gemini or the request pipeline fails.
+     *
+     * @param  Assessment  $assessment
+     * @param  string|null  $errorMessage  User-facing reason stored on the record
+     * @param  int|null  $durationMs
+     * @return AiAnalysis
+     */
+    public function persistFallback(
+        Assessment $assessment,
+        ?string $errorMessage = null,
+        ?int $durationMs = null
+    ): AiAnalysis {
+        $this->refreshCredentials();
+        $context = $this->buildContext($assessment);
+
+        return AiAnalysis::create([
+            'assessment_id'  => $assessment->id,
+            'model'          => $this->model,
+            'prompt_version' => self::PROMPT_VERSION,
+            'response_json'  => $this->fallbackPayload($assessment, $context),
+            'status'         => 'completed',
+            'is_fallback'    => true,
+            'error_message'  => $errorMessage ?: 'تعذر الاتصال بخدمة الذكاء الاصطناعي.',
             'duration_ms'    => $durationMs,
         ]);
     }

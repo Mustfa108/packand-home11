@@ -25,6 +25,9 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 - Community chat: `community_messages` + `CommunityMessageSent` on private channel `community-chat`
 - User model exposes `org_type_ar` / `org_size_ar` accessors (needed by organization profile API)
 - AI analysis gated until user has `org_type` + `org_size`
+- Uncaught API exceptions return Arabic JSON (`error_code: server_error`) instead of Laravel `Server Error`
+- Gemini HTTP timeout default is 25s so analysis can fall back before PHP/proxy kill the request
+- Sync AI analysis/chat/project-review wrap failures in try/catch, log to `ai` channel, and prefer rule-based fallback
 
 ### Questionnaire versioning (implemented)
 
@@ -58,6 +61,8 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 
 ## Recent major changes
 
+- 2026-09-17: API 500 handler returns Arabic JSON; AI analysis/project review catch exceptions and persist fallback when possible
+- 2026-09-17: Default `GEMINI_TIMEOUT` reduced to 25s; `persistFallback()` on `GeminiAssessmentAnalysisService`
 - 2026-09-17: Project review `ai_is_fallback` column + hardened Gemini JSON parse (`responseMimeType`, higher tokens)
 - 2026-09-17: Server ops doc expanded for Gemini priority (admin vs `.env`) and queue worker requirements
 - 2026-09-14: Switched PDF generation from DomPDF to mPDF for correct Arabic RTL
