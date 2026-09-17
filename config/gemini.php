@@ -10,4 +10,6 @@ return [
     'analysis_attempts_per_day' => env('GEMINI_ANALYSIS_ATTEMPTS_PER_DAY', 10),
     'chat_messages_per_day'     => env('GEMINI_CHAT_MESSAGES_PER_DAY', 30),
     'chat_max_question_length'  => env('GEMINI_CHAT_MAX_QUESTION_LENGTH', 500),
+    // Enough headroom for a complete Arabic answer; prompt still discourages filler.
+    'chat_max_output_tokens'    => env('GEMINI_CHAT_MAX_OUTPUT_TOKENS', 1536),
 ];
