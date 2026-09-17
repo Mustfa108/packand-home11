@@ -94,6 +94,7 @@ class ProjectReviewController extends Controller
                 'ai_how_it_works' => $evaluation['how_it_works'] ?? [],
                 'ai_ideal_steps' => $evaluation['ideal_steps'] ?? [],
                 'ai_generated_at' => now(),
+                'ai_is_fallback' => (bool) ($evaluation['is_fallback'] ?? false),
             ]);
         });
 
@@ -185,6 +186,7 @@ class ProjectReviewController extends Controller
             'risks' => $review->ai_risks ?? [],
             'recommendations' => $review->ai_recommendations ?? [],
             'kpis' => $review->ai_kpis ?? [],
+            'is_fallback' => (bool) $review->ai_is_fallback,
             'messages' => $review->messages?->map(fn ($message) => [
                 'id' => $message->id,
                 'role' => $message->role,

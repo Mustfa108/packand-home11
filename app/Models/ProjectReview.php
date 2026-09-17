@@ -41,6 +41,7 @@ class ProjectReview extends Model
         'ai_how_it_works',
         'ai_ideal_steps',
         'ai_generated_at',
+        'ai_is_fallback',
     ];
 
     protected function casts(): array
@@ -61,6 +62,7 @@ class ProjectReview extends Model
             'ai_how_it_works' => 'array',
             'ai_ideal_steps' => 'array',
             'ai_generated_at' => 'datetime',
+            'ai_is_fallback' => 'boolean',
         ];
     }
 

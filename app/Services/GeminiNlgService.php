@@ -168,12 +168,17 @@ ideal_steps خارطة طريق زمنية قابلة للتنفيذ خلال 30
 خطة الاستدامة: {$data['sustainability']}
 PROMPT;
 
-        $response = $this->callGemini($prompt, 2048);
+        $response = $this->callGemini($prompt, 4096, true);
         $parsed = $this->parseJsonResponse($response);
 
         if (is_array($parsed) && isset($parsed['score'], $parsed['summary'])) {
-            return $this->normalizeProjectEvaluation($parsed);
+            return $this->normalizeProjectEvaluation($parsed, false);
         }
+
+        Log::channel('ai')->warning('Project evaluation falling back to rule-based result', [
+            'has_response' => $response !== null,
+            'parse_ok' => is_array($parsed),
+        ]);
 
         return $this->fallbackProjectEvaluation($data);
     }
@@ -212,7 +217,7 @@ PROMPT;
             ?: 'أستطيع مساعدتك في تحويل نتيجة التقييم إلى خطوة عملية. ابدأ بتحديد التوصية الأهم هذا الأسبوع، ثم اكتب مسؤولاً وموعداً ومؤشراً بسيطاً لقياس إنجازها.';
     }
 
-    private function normalizeProjectEvaluation(array $result): array
+    private function normalizeProjectEvaluation(array $result, bool $isFallback = false): array
     {
         $score = max(0, min(100, (int) round((float) ($result['score'] ?? 0))));
         $levels = ['مبكر', 'قابل للتجربة', 'جاهز للنمو', 'متقدم'];
@@ -233,6 +238,7 @@ PROMPT;
             'risks' => $this->stringList($result['risks'] ?? [], 4),
             'recommendations' => $this->stringList($result['recommendations'] ?? [], 5),
             'kpis' => $this->stringList($result['kpis'] ?? [], 4),
+            'is_fallback' => $isFallback,
         ];
     }
 
@@ -247,41 +253,73 @@ PROMPT;
         $problem = trim((string) ($data['problem'] ?? ''));
         $beneficiaries = trim((string) ($data['beneficiaries'] ?? ''));
         $activities = trim((string) ($data['activities'] ?? ''));
+        $impact = trim((string) ($data['impact'] ?? ''));
+        $sustainability = trim((string) ($data['sustainability'] ?? ''));
+        $stage = trim((string) ($data['stage'] ?? ''));
+        $location = trim((string) ($data['location'] ?? ''));
 
-        return [
+        $result = [
             'score' => $score,
             'level' => $level,
-            'summary' => 'يعكس التقييم الحالي وضوحاً أولياً في فكرة المشروع، مع حاجة إلى تحويلها إلى نتائج قابلة للقياس وخطة تشغيل محددة.',
-            'full_summary' => "يهدف {$name} إلى معالجة احتياج مجتمعي مذكور في وصف المشكلة، عبر أنشطة موجّهة لفئة مستفيدة محددة. يعتمد النجاح على وضوح الرسالة، واقعية الأنشطة، وقدرة الفريق على القياس والمتابعة. الجاهزية الحالية ترتفع كلما اكتملت بيانات المستفيدين والتمويل وخطة الاستدامة، مع تحويل الفكرة إلى تجربة تشغيل قصيرة قابلة للمراجعة.",
+            'summary' => $problem !== ''
+                ? "يُظهر «{$name}» توجهاً لمعالجة: ".mb_substr($problem, 0, 120).'… مع حاجة لتحويل الفكرة إلى نتائج قابلة للقياس.'
+                : "يعكس تقييم «{$name}» وضوحاً أولياً في الفكرة، مع حاجة إلى خطة تشغيل ومؤشرات قياس محددة.",
+            'full_summary' => implode(' ', array_filter([
+                "يهدف «{$name}»".($location !== '' ? " في {$location}" : '').' إلى معالجة احتياج مجتمعي مذكور في وصف المشروع.',
+                $mission !== '' ? "تنطلق الرسالة من: {$mission}." : null,
+                $problem !== '' ? "تركّز المشكلة على: {$problem}." : null,
+                $beneficiaries !== '' ? "الفئة المستهدفة: {$beneficiaries}." : null,
+                $activities !== '' ? "الأنشطة المقترحة تشمل: {$activities}." : null,
+                $impact !== '' ? "الأثر المتوقع: {$impact}." : null,
+                $sustainability !== '' ? "خطة الاستدامة المذكورة: {$sustainability}." : null,
+                $stage !== '' ? "المرحلة الحالية: {$stage}." : null,
+                'الجاهزية ترتفع كلما اكتملت بيانات القياس والمتابعة وتحويل الأنشطة إلى تجربة تشغيل قصيرة قابلة للمراجعة.',
+            ])),
             'goals' => array_values(array_filter([
                 $mission !== '' ? "تحقيق رسالة المشروع: {$mission}" : 'تحويل الرسالة إلى نتائج قابلة للقياس',
-                $problem !== '' ? "تخفيف أثر المشكلة على المستفيدين بشكل ملموس" : 'تحديد المشكلة بدقة والتحقق منها ميدانياً',
-                $beneficiaries !== '' ? "خدمة الفئة المستفيدة بانتظام وتحسين تجربتها" : 'تحديد الفئة المستفيدة وحجم الاحتياج',
+                $problem !== '' ? "تخفيف أثر المشكلة على المستفيدين: ".mb_substr($problem, 0, 100) : 'تحديد المشكلة بدقة والتحقق منها ميدانياً',
+                $beneficiaries !== '' ? "خدمة الفئة المستفيدة بانتظام: {$beneficiaries}" : 'تحديد الفئة المستفيدة وحجم الاحتياج',
             ])),
-            'features' => [
-                'تدخل واضح مرتبط مباشرة بالمشكلة المذكورة',
-                'آلية تنفيذ تعتمد أنشطة عملية يمكن تجربتها خلال أسابيع',
-                'قابلية القياس عبر مؤشرات بسيطة للمستفيدين والنتائج',
-                'إمكانية التوسع الجغرافي عند نضج التشغيل',
-            ],
+            'features' => array_values(array_filter([
+                $problem !== '' ? 'تدخل مرتبط مباشرة بالمشكلة المذكورة في وصف المشروع' : 'تدخل واضح مرتبط بمشكلة مجتمعية',
+                $activities !== '' ? 'آلية تنفيذ مبنية على الأنشطة المدخلة ويمكن تجربتها خلال أسابيع' : 'آلية تنفيذ تعتمد أنشطة عملية قابلة للتجربة',
+                $beneficiaries !== '' ? "قيمة مباشرة للفئة: {$beneficiaries}" : 'قابلية القياس عبر مؤشرات بسيطة للمستفيدين',
+                $location !== '' ? "إمكانية التوسع انطلاقاً من موقع {$location}" : 'إمكانية التوسع الجغرافي عند نضج التشغيل',
+            ])),
             'how_it_works' => [
                 'يبدأ الفريق بفهم المشكلة والفئة المستفيدة من خلال وصف المشروع والمدخلات الحالية',
                 $activities !== '' ? "تنفَّذ الأنشطة الأساسية: {$activities}" : 'تُصمَّم الأنشطة الأساسية حول تدخل واحد واضح قابل للتجربة',
-                'يصل التدخل إلى المستفيدين عبر قنوات محلية أو رقمية حسب طبيعة المشروع',
+                $beneficiaries !== '' ? "يصل التدخل إلى: {$beneficiaries}" : 'يصل التدخل إلى المستفيدين عبر قنوات محلية أو رقمية حسب طبيعة المشروع',
                 'تُراجع النتائج أسبوعياً عبر مؤشر واحد رئيسي قبل التوسع',
             ],
-            'ideal_steps' => [
-                'توثيق المشكلة والفئة المستفيدة بمقابلات قصيرة',
-                'تصميم تجربة أولية لمدة 30 يوماً',
-                'تحديد مسؤوليات الفريق والميزانية التشغيلية',
-                'قياس نتيجة واحدة رئيسية ومراجعة أسبوعية',
-                'بناء شراكة محلية واحدة داعمة للتوسع',
+            'ideal_steps' => array_values(array_filter([
+                $problem !== '' ? 'توثيق المشكلة المذكورة عبر مقابلات قصيرة مع المستفيدين' : 'توثيق المشكلة والفئة المستفيدة بمقابلات قصيرة',
+                'تصميم تجربة أولية لمدة 30 يوماً مرتبطة بأنشطة المشروع',
+                ! empty($data['team_size']) ? 'توزيع مسؤوليات الفريق الحالي والميزانية التشغيلية' : 'تحديد مسؤوليات الفريق والميزانية التشغيلية',
+                $impact !== '' ? 'قياس الأثر المتوقع بمؤشر واحد ومراجعة أسبوعية' : 'قياس نتيجة واحدة رئيسية ومراجعة أسبوعية',
+                $sustainability !== '' ? 'ربط خطوة التوسع بخطة الاستدامة المدخلة وبناء شراكة محلية' : 'بناء شراكة محلية واحدة داعمة للتوسع',
+            ])),
+            'strengths' => array_values(array_filter([
+                $problem !== '' ? 'وجود مشكلة مجتمعية موثّقة في الوصف' : 'وجود مشكلة مجتمعية واضحة',
+                $activities !== '' ? 'إمكانية تحويل الأنشطة المدخلة إلى تدخل قابل للقياس' : 'إمكانية تحويل الأنشطة إلى تدخل قابل للقياس',
+            ])),
+            'risks' => [
+                'عدم كفاية الأدلة على حجم الاحتياج إن لم تُختبر الفرضيات ميدانياً',
+                'غياب مسؤوليات ومؤشرات زمنية محددة قد يبطئ التنفيذ',
             ],
-            'strengths' => ['وجود مشكلة مجتمعية واضحة', 'إمكانية تحويل الأنشطة إلى تدخل قابل للقياس'],
-            'risks' => ['عدم كفاية الأدلة على حجم الاحتياج', 'غياب مسؤوليات ومؤشرات زمنية محددة'],
-            'recommendations' => ['نفّذ مقابلات قصيرة مع 5 مستفيدين للتحقق من المشكلة', 'حوّل النشاط الرئيسي إلى تجربة صغيرة لمدة 30 يوماً', 'عيّن مسؤولاً لكل نتيجة واكتب موعد المراجعة الأسبوعية'],
-            'kpis' => ['عدد المستفيدين الذين أكملوا التجربة', 'نسبة تحقيق النتيجة المستهدفة', 'تكلفة الوصول إلى مستفيد واحد'],
+            'recommendations' => array_values(array_filter([
+                $beneficiaries !== '' ? "نفّذ مقابلات قصيرة مع مستفيدين من فئة: {$beneficiaries}" : 'نفّذ مقابلات قصيرة مع 5 مستفيدين للتحقق من المشكلة',
+                $activities !== '' ? 'حوّل النشاط الرئيسي إلى تجربة صغيرة لمدة 30 يوماً' : 'حوّل النشاط الرئيسي إلى تجربة صغيرة لمدة 30 يوماً',
+                'عيّن مسؤولاً لكل نتيجة واكتب موعد المراجعة الأسبوعية',
+            ])),
+            'kpis' => [
+                'عدد المستفيدين الذين أكملوا التجربة',
+                'نسبة تحقيق النتيجة المستهدفة',
+                'تكلفة الوصول إلى مستفيد واحد',
+            ],
         ];
+
+        return $this->normalizeProjectEvaluation($result, true);
     }
 
     private function parseJsonResponse(?string $response): ?array
@@ -291,13 +329,26 @@ PROMPT;
         }
 
         try {
-            $clean = trim(preg_replace('/^```(?:json)?|```$/m', '', $response) ?? $response);
+            $clean = trim($response);
+            $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean) ?? $clean;
+            $clean = preg_replace('/\s*```$/', '', $clean) ?? $clean;
+            $clean = trim($clean);
+
+            if (! str_starts_with($clean, '{')) {
+                if (preg_match('/\{.*\}/s', $clean, $matches)) {
+                    $clean = $matches[0];
+                }
+            }
+
             $decoded = json_decode($clean, true, 512, JSON_THROW_ON_ERROR);
+
             return is_array($decoded) ? $decoded : null;
         } catch (\Throwable $e) {
             Log::channel('ai')->warning('Project evaluation JSON parse failed', [
                 'error' => $e->getMessage(),
+                'response_preview' => mb_substr($response, 0, 200),
             ]);
+
             return null;
         }
     }
@@ -317,7 +368,7 @@ PROMPT;
         return json_encode($value ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
     }
 
-    private function callGemini(string $prompt, int $maxOutputTokens = 1024): ?string
+    private function callGemini(string $prompt, int $maxOutputTokens = 1024, bool $jsonMode = false): ?string
     {
         $this->refreshCredentials();
 
@@ -330,6 +381,15 @@ PROMPT;
         $startTime = microtime(true);
 
         try {
+            $generationConfig = [
+                'temperature' => 0.7,
+                'maxOutputTokens' => $maxOutputTokens,
+            ];
+
+            if ($jsonMode) {
+                $generationConfig['responseMimeType'] = 'application/json';
+            }
+
             $response = Http::timeout(60)
                 ->post("{$this->apiUrl}?key={$this->apiKey}", [
                     'contents' => [
@@ -339,10 +399,7 @@ PROMPT;
                             ],
                         ],
                     ],
-                    'generationConfig' => [
-                        'temperature' => 0.7,
-                        'maxOutputTokens' => $maxOutputTokens,
-                    ],
+                    'generationConfig' => $generationConfig,
                 ]);
 
             $duration = round((microtime(true) - $startTime) * 1000);
