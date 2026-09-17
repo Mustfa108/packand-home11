@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT — HumaScale Backend (`packand-home11`)
 
-**Last Updated:** 2026-09-14
+**Last Updated:** 2026-09-17
 
 ## Overview
 
@@ -26,6 +26,22 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 - User model exposes `org_type_ar` / `org_size_ar` accessors (needed by organization profile API)
 - AI analysis gated until user has `org_type` + `org_size`
 
+### Questionnaire versioning (implemented)
+
+- Table: `assessment_versions` (`draft` | `published` | `archived`)
+- Pillars/questions carry `assessment_version_id`
+- Past assessments keep `assessment_version_id` snapshot for scoring
+- Admin flow: create draft (copies published) → edit axes/questions **in-place on draft only** → publish (archives previous published)
+- `PATCH` on published questions returns 403 — create a draft first (no auto-version on edit)
+- Users always load the current **published** version via assessment start/questions APIs
+- Manager: `AssessmentVersionManager`
+
+### Project review AI
+
+- Sync `POST /api/project-reviews` (no queue)
+- On Gemini/parse failure: rule-based fallback + `ai_is_fallback` / response `is_fallback`
+- Frontend should show a fallback banner when `is_fallback` is true
+
 ## Important endpoints (new/updated)
 
 | Method | Path | Notes |
@@ -36,13 +52,15 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 | GET/POST | `/api/community-chat/messages` | User community chat |
 | GET/POST | `/api/admin/community-chat/messages` | Admin community chat |
 | GET | `/api/project-map` | Claimed/available project pins |
-| POST | `/api/project-reviews` | Returns goals, features, how_it_works, ideal_steps |
+| POST | `/api/project-reviews` | Returns goals, features, how_it_works, ideal_steps, `is_fallback` |
 | POST | `/api/report/{id}/regenerate` | Sync PDF rebuild for owner |
 | POST | `/api/broadcasting/auth` | Echo channel auth |
 
-## Recent major changes (2026-09-14)
+## Recent major changes
 
-- Switched PDF generation from DomPDF to mPDF for correct Arabic RTL
+- 2026-09-17: Project review `ai_is_fallback` column + hardened Gemini JSON parse (`responseMimeType`, higher tokens)
+- 2026-09-17: Server ops doc expanded for Gemini priority (admin vs `.env`) and queue worker requirements
+- 2026-09-14: Switched PDF generation from DomPDF to mPDF for correct Arabic RTL
 - Documented CORS env requirements in `config/cors.php`
 - Added User `org_type_ar` / `org_size_ar` accessors
 - Server ops prompt: `docs/server-fix-prompt.md`
@@ -70,6 +88,7 @@ php artisan reverb:start
 ## Known issues / decisions
 
 - Named queues `ai`/`pdf` removed from dispatch path for reliability; use default queue + afterResponse for PDF
+- Smart assessment summary has **no** rule-based fallback; needs queue worker + Gemini success to set `ai_generated_at`
 - `Message` model (1:1 DM) remains unused; community chat uses `community_messages`
 - Hoppscotch not present; Postman collection under `docs/postman_collection.json`
 - Realtime chat requires server DNS + TLS proxy for Reverb (see `docs/server-fix-prompt.md`)
