@@ -360,6 +360,12 @@ PROMPT;
                         'body_preview'  => mb_substr($response->body(), 0, 500),
                     ]);
 
+                    GeminiHelpers::maybeRecordQuotaHit(
+                        $status,
+                        is_array($error) ? ($error['status'] ?? null) : null,
+                        is_array($error) ? ($error['message'] ?? null) : null
+                    );
+
                     if (in_array($status, [429, 503], true) && $attempt < $maxRetries) {
                         usleep(($sleepMs * ($attempt + 1)) * 1000);
 

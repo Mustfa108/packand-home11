@@ -104,6 +104,14 @@ PROMPT;
                     $assessment->id
                 ));
 
+                $json = $response->json();
+                $error = is_array($json) ? ($json['error'] ?? null) : null;
+                \App\Support\GeminiHelpers::maybeRecordQuotaHit(
+                    $response->status(),
+                    is_array($error) ? ($error['status'] ?? null) : null,
+                    is_array($error) ? ($error['message'] ?? null) : null
+                );
+
                 return ['answer' => $this->ruleBasedAnswer($assessment, $question), 'fallback' => true];
             }
 

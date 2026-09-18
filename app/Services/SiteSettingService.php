@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\SiteSetting;
+use App\Support\GeminiHelpers;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class SiteSettingService
@@ -10,6 +12,14 @@ class SiteSettingService
     public const KEY_GEMINI_API_KEY = 'gemini_api_key';
 
     public const KEY_GEMINI_MODEL = 'gemini_model';
+
+    public const KEY_GEMINI_QUOTA_HIT_AT = 'gemini_quota_hit_at';
+
+    public const KEY_GEMINI_QUOTA_MESSAGE = 'gemini_quota_last_message';
+
+    public const KEY_GEMINI_QUOTA_HTTP = 'gemini_quota_last_http';
+
+    public const KEY_GEMINI_QUOTA_STATUS = 'gemini_quota_last_status';
 
     public const KEY_SOCIAL_FACEBOOK = 'social_facebook';
 
@@ -66,6 +76,64 @@ class SiteSettingService
         }
 
         return (string) config('gemini.model', 'gemini-3.6-flash');
+    }
+
+    /**
+     * Remember the latest Gemini free-tier / rate-limit failure for the admin UI.
+     */
+    public function recordGeminiQuotaHit(?int $httpStatus, ?string $errorStatus, ?string $errorMessage): void
+    {
+        $safeMessage = GeminiHelpers::redactSecrets(trim((string) $errorMessage));
+
+        $this->set(self::KEY_GEMINI_QUOTA_HIT_AT, now()->toIso8601String());
+        $this->set(self::KEY_GEMINI_QUOTA_MESSAGE, mb_substr($safeMessage, 0, 500) ?: null);
+        $this->set(self::KEY_GEMINI_QUOTA_HTTP, $httpStatus !== null ? (string) $httpStatus : null);
+        $this->set(self::KEY_GEMINI_QUOTA_STATUS, $errorStatus ? mb_substr($errorStatus, 0, 80) : null);
+    }
+
+    public function clearGeminiQuotaHit(): void
+    {
+        $this->set(self::KEY_GEMINI_QUOTA_HIT_AT, null);
+        $this->set(self::KEY_GEMINI_QUOTA_MESSAGE, null);
+        $this->set(self::KEY_GEMINI_QUOTA_HTTP, null);
+        $this->set(self::KEY_GEMINI_QUOTA_STATUS, null);
+    }
+
+    /**
+     * Active for ~24h after a quota/rate-limit hit (typical free-tier daily reset window).
+     *
+     * @return array{active: bool, hit_at: string, http_status: ?int, error_status: ?string, last_error: ?string, message_ar: string, log_hint_ar: string}|null
+     */
+    public function geminiQuotaAlert(): ?array
+    {
+        $hitAtRaw = $this->get(self::KEY_GEMINI_QUOTA_HIT_AT);
+        if (! $hitAtRaw) {
+            return null;
+        }
+
+        try {
+            $hitAt = Carbon::parse((string) $hitAtRaw);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ($hitAt->lt(now()->subDay())) {
+            return null;
+        }
+
+        $http = $this->get(self::KEY_GEMINI_QUOTA_HTTP);
+        $errorStatus = $this->get(self::KEY_GEMINI_QUOTA_STATUS);
+        $lastError = $this->get(self::KEY_GEMINI_QUOTA_MESSAGE);
+
+        return [
+            'active' => true,
+            'hit_at' => $hitAt->toIso8601String(),
+            'http_status' => $http !== null && $http !== '' ? (int) $http : null,
+            'error_status' => $errorStatus ? (string) $errorStatus : null,
+            'last_error' => $lastError ? (string) $lastError : null,
+            'message_ar' => 'يبدو أن الحد اليومي أو حصة الطلبات المجانية لمفتاح Gemini قد استُنفدت. الميزات الذكية قد ترجع تحليلاً مبسّطاً حتى تُعاد تعبئة الحصة (عادةً خلال 24 ساعة) أو تستخدم مفتاحاً/خطة أعلى.',
+            'log_hint_ar' => 'في لوج السيرفر (قناة ai) ابحث عن: status 429 أو RESOURCE_EXHAUSTED أو كلمات quota / rate limit / exceeded your current quota. خطأ 503 مع "high demand" ليس حداً يومياً بل ضغطاً مؤقتاً.',
+        ];
     }
 
     public function socialLinks(): array

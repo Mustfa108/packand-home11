@@ -21,6 +21,7 @@ class AdminSettingsController extends Controller
             'gemini_api_key_set' => $key !== '' && $key !== 'your_gemini_api_key_here',
             'gemini_model' => $this->settings->geminiModel(),
             'provider' => 'gemini',
+            'quota_alert' => $this->settings->geminiQuotaAlert(),
         ], 'تم تحميل إعدادات الذكاء الاصطناعي.');
     }
 
@@ -33,6 +34,8 @@ class AdminSettingsController extends Controller
 
         if (array_key_exists('gemini_api_key', $validated) && filled($validated['gemini_api_key'])) {
             $this->settings->set(SiteSettingService::KEY_GEMINI_API_KEY, $validated['gemini_api_key'], true);
+            // New key usually means a fresh quota window for the admin UI alert.
+            $this->settings->clearGeminiQuotaHit();
         }
 
         if (array_key_exists('gemini_model', $validated) && filled($validated['gemini_model'])) {

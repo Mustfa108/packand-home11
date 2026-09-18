@@ -21,7 +21,8 @@ Laravel API for HumaScale: questionnaire versioning, weighted assessments, Gemin
 - AI jobs: `ProcessAssessmentAI` on default queue — writes summary (Gemini or rule-based fallback), analysis, then **regenerates PDF** so الملخص الذكي is included
 - Gemini credentials: `SiteSettingService` (admin panel) → fallback `GEMINI_API_KEY`
 - Default model: **`gemini-3.6-flash`** (older 1.5 / 2.5 flash return 404 for new keys)
-- Gemini helpers: `App\Support\GeminiHelpers` (JSON sanitize, secret redact); retries on 503/timeout
+- Gemini helpers: `App\Support\GeminiHelpers` (JSON sanitize, secret redact, quota detection); retries on 503/timeout
+- Quota/rate-limit hits (429 / RESOURCE_EXHAUSTED) are stored and exposed as `quota_alert` on `GET /api/admin/settings/ai`
 - AI analysis: `POST .../ai-analysis` with `force=true` regenerates when latest is `is_fallback`
 - Admin statistics: date filter uses `COALESCE(prefix.completed_at, …)`; axis averages grouped by `pillar_name_ar` (no version duplicates)
 

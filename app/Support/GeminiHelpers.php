@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Services\SiteSettingService;
+
 /**
  * Shared helpers for Gemini HTTP + JSON responses.
  */
@@ -17,6 +19,55 @@ final class GeminiHelpers
         $message = preg_replace('/(AQ\.[0-9A-Za-z_-]{20,})/', '***', $message) ?? $message;
 
         return $message;
+    }
+
+    /**
+     * Detect free-tier / daily quota / rate-limit errors from Gemini HTTP responses.
+     */
+    public static function isQuotaOrRateLimit(?int $httpStatus, mixed $errorStatus = null, mixed $errorMessage = null): bool
+    {
+        if ($httpStatus === 429) {
+            return true;
+        }
+
+        $status = strtoupper(trim((string) $errorStatus));
+        if ($status === 'RESOURCE_EXHAUSTED') {
+            return true;
+        }
+
+        $message = strtolower((string) $errorMessage);
+
+        if ($message === '') {
+            return false;
+        }
+
+        return str_contains($message, 'quota')
+            || str_contains($message, 'rate limit')
+            || str_contains($message, 'rate_limit')
+            || str_contains($message, 'exceeded your current')
+            || str_contains($message, 'generaterequestsperday')
+            || str_contains($message, 'requests per day')
+            || str_contains($message, 'per day per project');
+    }
+
+    /**
+     * Persist a quota hit so the admin settings page can show an alert.
+     */
+    public static function maybeRecordQuotaHit(?int $httpStatus, mixed $errorStatus = null, mixed $errorMessage = null): void
+    {
+        if (! self::isQuotaOrRateLimit($httpStatus, $errorStatus, $errorMessage)) {
+            return;
+        }
+
+        try {
+            app(SiteSettingService::class)->recordGeminiQuotaHit(
+                $httpStatus,
+                is_string($errorStatus) ? $errorStatus : null,
+                is_string($errorMessage) ? $errorMessage : null
+            );
+        } catch (\Throwable) {
+            // Never break AI flow because of status bookkeeping.
+        }
     }
 
     /**
