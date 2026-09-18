@@ -6,7 +6,6 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\AssessmentPillarResult;
-use App\Models\Pillar;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -56,27 +55,31 @@ class AdminDashboardController extends Controller
             ->whereYear('created_at', now()->year)
             ->count();
 
-        // Pillar averages
-        $pillarAverages = Pillar::orderBy('display_order')
+        // Pillar averages — group by snapshot name to avoid version duplicates.
+        $pillarAverages = AssessmentPillarResult::query()
+            ->select(
+                'pillar_name_ar as pillar_ar',
+                DB::raw('AVG(percentage) as average_percentage')
+            )
+            ->whereNotNull('pillar_name_ar')
+            ->where('pillar_name_ar', '!=', '')
+            ->groupBy('pillar_name_ar')
+            ->orderBy('pillar_name_ar')
             ->get()
-            ->map(function ($pillar) {
-                $avg = AssessmentPillarResult::where('pillar_id', $pillar->id)->avg('percentage');
-                return [
-                    'pillar_ar'          => $pillar->name_ar,
-                    'average_percentage' => round($avg ?? 0, 1),
-                ];
-            });
+            ->map(fn ($row) => [
+                'pillar_ar'          => $row->pillar_ar,
+                'average_percentage' => round((float) $row->average_percentage, 1),
+            ]);
 
-        // Most common weak pillar
+        // Most common weak pillar (by snapshot name).
         $mostCommonWeak = AssessmentPillarResult::where('is_weak', true)
-            ->select('pillar_id', DB::raw('COUNT(*) as count'))
-            ->groupBy('pillar_id')
+            ->select('pillar_name_ar', DB::raw('COUNT(*) as count'))
+            ->whereNotNull('pillar_name_ar')
+            ->groupBy('pillar_name_ar')
             ->orderByDesc('count')
             ->first();
 
-        $mostCommonWeakAr = $mostCommonWeak
-            ? Pillar::find($mostCommonWeak->pillar_id)?->name_ar ?? 'غير محدد'
-            : 'غير محدد';
+        $mostCommonWeakAr = $mostCommonWeak?->pillar_name_ar ?? 'غير محدد';
 
         return ApiResponse::success([
             'total_users'              => $totalUsers,
@@ -109,16 +112,23 @@ class AdminDashboardController extends Controller
 
     public function pillarAnalytics(): JsonResponse
     {
-        $pillars = Pillar::orderBy('display_order')->get();
-
-        $analytics = $pillars->map(function ($pillar) {
-            $avg = AssessmentPillarResult::where('pillar_id', $pillar->id)->avg('percentage');
-            return [
-                'pillar_key'         => $pillar->key,
-                'pillar_ar'          => $pillar->name_ar,
-                'average_percentage' => round($avg ?? 0, 1),
-            ];
-        });
+        $analytics = AssessmentPillarResult::query()
+            ->leftJoin('pillars', 'pillars.id', '=', 'assessment_pillar_results.pillar_id')
+            ->select(
+                DB::raw('MAX(pillars.key) as pillar_key'),
+                'assessment_pillar_results.pillar_name_ar as pillar_ar',
+                DB::raw('AVG(assessment_pillar_results.percentage) as average_percentage')
+            )
+            ->whereNotNull('assessment_pillar_results.pillar_name_ar')
+            ->where('assessment_pillar_results.pillar_name_ar', '!=', '')
+            ->groupBy('assessment_pillar_results.pillar_name_ar')
+            ->orderBy('assessment_pillar_results.pillar_name_ar')
+            ->get()
+            ->map(fn ($row) => [
+                'pillar_key'         => $row->pillar_key ?: $row->pillar_ar,
+                'pillar_ar'          => $row->pillar_ar,
+                'average_percentage' => round((float) $row->average_percentage, 1),
+            ]);
 
         $sorted   = $analytics->sortByDesc('average_percentage');
         $strongest = $sorted->first();

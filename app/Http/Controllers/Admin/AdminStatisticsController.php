@@ -6,7 +6,6 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\AssessmentPillarResult;
-use App\Models\Pillar;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -56,21 +55,29 @@ class AdminStatisticsController extends Controller
             ];
         }
 
-        // Average score per axis.
+        // Average score per axis — group by snapshot name to avoid duplicates
+        // across draft/published/archived pillar copies.
         $axisAveragesQuery = AssessmentPillarResult::query()
             ->join('assessments', 'assessments.id', '=', 'assessment_pillar_results.assessment_id')
             ->where('assessments.status', 'completed');
         $this->applyFilters($axisAveragesQuery, $from, $to, $type, $size, 'assessments.');
 
-        $axisAverages = Pillar::orderBy('display_order')->get()->map(function ($pillar) use ($axisAveragesQuery) {
-            $avg = (clone $axisAveragesQuery)->where('assessment_pillar_results.pillar_id', $pillar->id)->avg('assessment_pillar_results.percentage');
-
-            return [
-                'pillar_id'          => $pillar->id,
-                'pillar_name_ar'     => $pillar->name_ar,
-                'average_percentage' => round($avg ?? 0, 1),
-            ];
-        });
+        $axisAverages = (clone $axisAveragesQuery)
+            ->select(
+                'assessment_pillar_results.pillar_name_ar',
+                DB::raw('AVG(assessment_pillar_results.percentage) as average_percentage'),
+                DB::raw('MIN(assessment_pillar_results.pillar_id) as pillar_id')
+            )
+            ->whereNotNull('assessment_pillar_results.pillar_name_ar')
+            ->where('assessment_pillar_results.pillar_name_ar', '!=', '')
+            ->groupBy('assessment_pillar_results.pillar_name_ar')
+            ->orderBy('assessment_pillar_results.pillar_name_ar')
+            ->get()
+            ->map(fn ($row) => [
+                'pillar_id'          => (int) $row->pillar_id,
+                'pillar_name_ar'     => $row->pillar_name_ar,
+                'average_percentage' => round((float) $row->average_percentage, 1),
+            ]);
 
         $sortedAxes = $axisAverages->sortByDesc('average_percentage')->values();
 
@@ -91,7 +98,7 @@ class AdminStatisticsController extends Controller
         // substr(...,1,7) works on both MySQL and SQLite date strings.
         $timeQuery = (clone $assessmentsQuery)
             ->select(
-                DB::raw("substr(COALESCE(completed_at, created_at), 1, 7) as period"),
+                DB::raw('substr(COALESCE(completed_at, created_at), 1, 7) as period'),
                 DB::raw('COUNT(*) as count')
             )
             ->groupBy('period')
@@ -129,7 +136,7 @@ class AdminStatisticsController extends Controller
 
     private function applyFilters($query, ?string $from, $to, ?string $type, ?string $size, string $prefix = ''): void
     {
-        $dateColumn = $prefix.'COALESCE(completed_at, created_at)';
+        $dateColumn = "COALESCE({$prefix}completed_at, {$prefix}created_at)";
 
         if ($from) {
             $query->whereRaw("{$dateColumn} >= ?", [$from]);

@@ -136,7 +136,7 @@ PROMPT;
             Log::channel('ai')->error('Gemini chat exception', [
                 'assessment_id' => $assessment->id,
                 'model'         => $model,
-                'message'       => $e->getMessage(),
+                'message'       => \App\Support\GeminiHelpers::redactSecrets($e->getMessage()),
                 'exception'     => $e::class,
             ]);
 

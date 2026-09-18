@@ -23,10 +23,17 @@ class AiAnalysisController extends Controller
             return $assessment;
         }
 
-        // Never regenerate when a good analysis already exists (page refresh protection).
+        $forceRetry = $request->boolean('force');
+
+        // Never regenerate when a good (non-fallback) analysis already exists.
         $existing = $this->latestUsable($assessment);
-        if ($existing) {
+        if ($existing && ! ($forceRetry && $existing->is_fallback)) {
             return ApiResponse::success($this->payload($existing), 'التحليل الذكي جاهز بالفعل.');
+        }
+
+        // Allow one more Gemini attempt when the stored analysis is rule-based only.
+        if ($existing && $forceRetry && $existing->is_fallback) {
+            $existing->update(['status' => 'failed', 'error_message' => 'أُعيدت المحاولة للحصول على تحليل ذكي موسّع.']);
         }
 
         if ($assessment->user->org_type === null || $assessment->user->org_size === null) {

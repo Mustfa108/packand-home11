@@ -113,6 +113,7 @@
     <div><span class="readiness-badge {{ $badgeClass }}">مستوى الاستعداد: {{ $labelAr }}</span></div>
   </div>
   @if($assessment->ai_summary_ar)
+    <div class="section-title" style="margin-top:14px;">الملخص الذكي</div>
     <div class="summary-text">{{ $assessment->ai_summary_ar }}</div>
   @endif
 </div>

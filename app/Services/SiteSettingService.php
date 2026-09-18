@@ -65,7 +65,7 @@ class SiteSettingService
             return $fromDb;
         }
 
-        return (string) config('gemini.model', 'gemini-2.0-flash');
+        return (string) config('gemini.model', 'gemini-3.6-flash');
     }
 
     public function socialLinks(): array

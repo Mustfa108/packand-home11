@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AiAnalysis;
 use App\Models\Assessment;
+use App\Support\GeminiHelpers;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -34,7 +35,7 @@ class GeminiAssessmentAnalysisService
         $settings = $this->settings ?? app(SiteSettingService::class);
         $this->apiKey = $settings->geminiApiKey();
         $this->model = $settings->geminiModel();
-        $this->timeout = (int) config('gemini.timeout', 25);
+        $this->timeout = (int) config('gemini.timeout', 45);
         $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent";
     }
 
@@ -97,7 +98,7 @@ class GeminiAssessmentAnalysisService
         } catch (\Throwable $e) {
             Log::channel('ai')->error('Gemini assessment analysis generate exception', [
                 'assessment_id' => $assessment->id,
-                'message' => $e->getMessage(),
+                'message' => GeminiHelpers::redactSecrets($e->getMessage()),
             ]);
         }
 
@@ -157,18 +158,17 @@ class GeminiAssessmentAnalysisService
      */
     public function parseAndValidate(string $responseText): ?array
     {
-        try {
-            $clean = trim(preg_replace('/^```(?:json)?|```$/m', '', $responseText) ?? $responseText);
-            $decoded = json_decode($clean, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\Throwable $e) {
+        $decoded = GeminiHelpers::decodeJson($responseText);
+
+        if ($decoded === null) {
             Log::channel('ai')->warning('Gemini assessment analysis JSON parse failed', [
-                'error' => $e->getMessage(),
+                'preview' => mb_substr(GeminiHelpers::sanitizeJsonText($responseText), 0, 200),
             ]);
 
             return null;
         }
 
-        if (! is_array($decoded) || ! isset($decoded['overall_summary'])) {
+        if (! isset($decoded['overall_summary'])) {
             return null;
         }
 
@@ -305,6 +305,7 @@ class GeminiAssessmentAnalysisService
 - لا تحسب درجات جديدة ولا تغيّر النسب.
 - لا تخترع محاور أو بيانات غير موجودة في السياق.
 - كل المخرجات باللغة العربية الفصيحة الواضحة والمهنية.
+- أعد JSON صالحاً ومختصراً بدون أسطر فارغة داخل النصوص ودون أحرف تحكم.
 
 سياق النتائج (بدون أي بيانات شخصية):
 {$contextJson}
@@ -321,55 +322,82 @@ class GeminiAssessmentAnalysisService
 القيود: من 3 إلى 5 توصيات عملية، خصّصها حسب نوع وحجم المنظمة في السياق، ورتّب الأولويات بدءاً من المحاور الأضعف.
 PROMPT;
 
-        $startTime = microtime(true);
+        $maxRetries = max(0, (int) config('gemini.max_retries', 2));
+        $sleepMs = max(200, (int) config('gemini.retry_sleep_ms', 800));
+        $maxTokens = (int) config('gemini.analysis_max_output_tokens', 4096);
 
-        try {
-            $response = Http::timeout($this->timeout)
-                ->post("{$this->apiUrl}?key={$this->apiKey}", [
-                    'contents' => [
-                        ['parts' => [['text' => $prompt]]],
-                    ],
-                    'generationConfig' => [
-                        'temperature'     => 0.6,
-                        'maxOutputTokens' => 2048,
-                        'responseMimeType' => 'application/json',
-                    ],
+        for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+            $startTime = microtime(true);
+
+            try {
+                $response = Http::timeout($this->timeout)
+                    ->post("{$this->apiUrl}?key={$this->apiKey}", [
+                        'contents' => [
+                            ['parts' => [['text' => $prompt]]],
+                        ],
+                        'generationConfig' => [
+                            'temperature'      => 0.4,
+                            'maxOutputTokens'  => $maxTokens,
+                            'responseMimeType' => 'application/json',
+                        ],
+                    ]);
+
+                $duration = round((microtime(true) - $startTime) * 1000);
+
+                if ($response->failed()) {
+                    $status = $response->status();
+                    $json = $response->json();
+                    $error = is_array($json) ? ($json['error'] ?? null) : null;
+
+                    Log::channel('ai')->error('Gemini assessment analysis request failed', [
+                        'model'         => $this->model,
+                        'attempt'       => $attempt + 1,
+                        'status'        => $status,
+                        'duration'      => "{$duration}ms",
+                        'error_code'    => is_array($error) ? ($error['code'] ?? null) : null,
+                        'error_status'  => is_array($error) ? ($error['status'] ?? null) : null,
+                        'error_message' => is_array($error) ? ($error['message'] ?? null) : null,
+                        'body_preview'  => mb_substr($response->body(), 0, 500),
+                    ]);
+
+                    if (in_array($status, [429, 503], true) && $attempt < $maxRetries) {
+                        usleep(($sleepMs * ($attempt + 1)) * 1000);
+
+                        continue;
+                    }
+
+                    return null;
+                }
+
+                $text = $response->json('candidates.0.content.parts.0.text');
+
+                Log::channel('ai')->info('Gemini assessment analysis success', [
+                    'duration'       => "{$duration}ms",
+                    'attempt'        => $attempt + 1,
+                    'response_chars' => strlen((string) $text),
                 ]);
 
-            $duration = round((microtime(true) - $startTime) * 1000);
-
-            if ($response->failed()) {
-                $json = $response->json();
-                $error = is_array($json) ? ($json['error'] ?? null) : null;
-
-                Log::channel('ai')->error('Gemini assessment analysis request failed', [
-                    'model'         => $this->model,
-                    'status'        => $response->status(),
-                    'duration'      => "{$duration}ms",
-                    'error_code'    => is_array($error) ? ($error['code'] ?? null) : null,
-                    'error_status'  => is_array($error) ? ($error['status'] ?? null) : null,
-                    'error_message' => is_array($error) ? ($error['message'] ?? null) : null,
-                    'error_details' => is_array($error) ? ($error['details'] ?? null) : null,
-                    'body_preview'  => mb_substr($response->body(), 0, 2000),
+                return $text;
+            } catch (\Throwable $e) {
+                $message = GeminiHelpers::redactSecrets($e->getMessage());
+                Log::channel('ai')->error('Gemini assessment analysis exception', [
+                    'attempt' => $attempt + 1,
+                    'message' => $message,
                 ]);
+
+                $isTimeout = str_contains(strtolower($message), 'timed out')
+                    || str_contains(strtolower($message), 'curl error 28');
+
+                if ($isTimeout && $attempt < $maxRetries) {
+                    usleep(($sleepMs * ($attempt + 1)) * 1000);
+
+                    continue;
+                }
 
                 return null;
             }
-
-            $text = $response->json('candidates.0.content.parts.0.text');
-
-            Log::channel('ai')->info('Gemini assessment analysis success', [
-                'duration'       => "{$duration}ms",
-                'response_chars' => strlen((string) $text),
-            ]);
-
-            return $text;
-        } catch (\Throwable $e) {
-            Log::channel('ai')->error('Gemini assessment analysis exception', [
-                'message' => $e->getMessage(),
-            ]);
-
-            return null;
         }
+
+        return null;
     }
 }

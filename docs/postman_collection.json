@@ -162,7 +162,7 @@
           "request": {
             "method": "PUT",
             "url": "{{base}}/admin/settings/ai",
-            "body": { "mode": "raw", "raw": "{\n  \"gemini_api_key\": \"YOUR_KEY\",\n  \"gemini_model\": \"gemini-2.0-flash\"\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"gemini_api_key\": \"YOUR_KEY\",\n  \"gemini_model\": \"gemini-3.6-flash\"\n}" }
           }
         },
         { "name": "Admin get social settings", "request": { "method": "GET", "url": "{{base}}/admin/settings/social" } },

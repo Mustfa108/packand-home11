@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Assessment;
 use App\Models\ProjectReview;
+use App\Support\GeminiHelpers;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -104,24 +105,21 @@ PROMPT;
 يجب أن يكون عدد العناصر في المصفوفة مساويًا لعدد الإجراءات المدخلة.
 PROMPT;
 
-        $response = $this->callGemini($prompt);
+        $response = $this->callGemini($prompt, 3072, true);
 
         if (! $response) {
             return null;
         }
 
-        try {
-            $clean = trim(preg_replace('/^```json|```$/m', '', $response) ?? $response);
+        $decoded = GeminiHelpers::decodeJson($response);
 
-            return json_decode($clean, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\Throwable $e) {
+        if ($decoded === null) {
             Log::channel('ai')->error('Gemini JSON parse failed', [
-                'response' => $response,
-                'error' => $e->getMessage(),
+                'response' => mb_substr((string) $response, 0, 200),
             ]);
-
-            return null;
         }
+
+        return $decoded;
     }
 
     /**
@@ -328,29 +326,15 @@ PROMPT;
             return null;
         }
 
-        try {
-            $clean = trim($response);
-            $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean) ?? $clean;
-            $clean = preg_replace('/\s*```$/', '', $clean) ?? $clean;
-            $clean = trim($clean);
+        $decoded = GeminiHelpers::decodeJson($response);
 
-            if (! str_starts_with($clean, '{')) {
-                if (preg_match('/\{.*\}/s', $clean, $matches)) {
-                    $clean = $matches[0];
-                }
-            }
-
-            $decoded = json_decode($clean, true, 512, JSON_THROW_ON_ERROR);
-
-            return is_array($decoded) ? $decoded : null;
-        } catch (\Throwable $e) {
+        if ($decoded === null) {
             Log::channel('ai')->warning('Project evaluation JSON parse failed', [
-                'error' => $e->getMessage(),
                 'response_preview' => mb_substr($response, 0, 200),
             ]);
-
-            return null;
         }
+
+        return $decoded;
     }
 
     private function stringList(mixed $items, int $limit): array
@@ -378,64 +362,91 @@ PROMPT;
             return null;
         }
 
-        $startTime = microtime(true);
+        $maxRetries = max(0, (int) config('gemini.max_retries', 2));
+        $sleepMs = max(200, (int) config('gemini.retry_sleep_ms', 800));
+        $timeout = (int) config('gemini.timeout', 45);
 
-        try {
-            $generationConfig = [
-                'temperature' => 0.7,
-                'maxOutputTokens' => $maxOutputTokens,
-            ];
+        for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+            $startTime = microtime(true);
 
-            if ($jsonMode) {
-                $generationConfig['responseMimeType'] = 'application/json';
-            }
+            try {
+                $generationConfig = [
+                    'temperature' => 0.7,
+                    'maxOutputTokens' => $maxOutputTokens,
+                ];
 
-            $response = Http::timeout((int) config('gemini.timeout', 25))
-                ->post("{$this->apiUrl}?key={$this->apiKey}", [
-                    'contents' => [
-                        [
-                            'parts' => [
-                                ['text' => $prompt],
+                if ($jsonMode) {
+                    $generationConfig['responseMimeType'] = 'application/json';
+                }
+
+                $response = Http::timeout($timeout)
+                    ->post("{$this->apiUrl}?key={$this->apiKey}", [
+                        'contents' => [
+                            [
+                                'parts' => [
+                                    ['text' => $prompt],
+                                ],
                             ],
                         ],
-                    ],
-                    'generationConfig' => $generationConfig,
+                        'generationConfig' => $generationConfig,
+                    ]);
+
+                $duration = round((microtime(true) - $startTime) * 1000);
+
+                if ($response->failed()) {
+                    $status = $response->status();
+                    $json = $response->json();
+                    $error = is_array($json) ? ($json['error'] ?? null) : null;
+
+                    Log::channel('ai')->error('Gemini API request failed', [
+                        'model'         => $this->model,
+                        'attempt'       => $attempt + 1,
+                        'status'        => $status,
+                        'duration'      => "{$duration}ms",
+                        'error_code'    => is_array($error) ? ($error['code'] ?? null) : null,
+                        'error_status'  => is_array($error) ? ($error['status'] ?? null) : null,
+                        'error_message' => is_array($error) ? ($error['message'] ?? null) : null,
+                        'body_preview'  => mb_substr($response->body(), 0, 500),
+                    ]);
+
+                    if (in_array($status, [429, 503], true) && $attempt < $maxRetries) {
+                        usleep(($sleepMs * ($attempt + 1)) * 1000);
+
+                        continue;
+                    }
+
+                    return null;
+                }
+
+                $text = $response->json('candidates.0.content.parts.0.text');
+
+                Log::channel('ai')->info('Gemini API call success', [
+                    'duration' => "{$duration}ms",
+                    'attempt' => $attempt + 1,
+                    'response_chars' => strlen($text ?? ''),
                 ]);
 
-            $duration = round((microtime(true) - $startTime) * 1000);
-
-            if ($response->failed()) {
-                $json = $response->json();
-                $error = is_array($json) ? ($json['error'] ?? null) : null;
-
-                Log::channel('ai')->error('Gemini API request failed', [
-                    'model'         => $this->model,
-                    'status'        => $response->status(),
-                    'duration'      => "{$duration}ms",
-                    'error_code'    => is_array($error) ? ($error['code'] ?? null) : null,
-                    'error_status'  => is_array($error) ? ($error['status'] ?? null) : null,
-                    'error_message' => is_array($error) ? ($error['message'] ?? null) : null,
-                    'error_details' => is_array($error) ? ($error['details'] ?? null) : null,
-                    'body_preview'  => mb_substr($response->body(), 0, 2000),
+                return $text;
+            } catch (\Throwable $e) {
+                $message = GeminiHelpers::redactSecrets($e->getMessage());
+                Log::channel('ai')->error('Gemini API exception', [
+                    'attempt' => $attempt + 1,
+                    'message' => $message,
                 ]);
+
+                $isTimeout = str_contains(strtolower($message), 'timed out')
+                    || str_contains(strtolower($message), 'curl error 28');
+
+                if ($isTimeout && $attempt < $maxRetries) {
+                    usleep(($sleepMs * ($attempt + 1)) * 1000);
+
+                    continue;
+                }
 
                 return null;
             }
-
-            $text = $response->json('candidates.0.content.parts.0.text');
-
-            Log::channel('ai')->info('Gemini API call success', [
-                'duration' => "{$duration}ms",
-                'response_chars' => strlen($text ?? ''),
-            ]);
-
-            return $text;
-        } catch (\Throwable $e) {
-            Log::channel('ai')->error('Gemini API exception', [
-                'message' => $e->getMessage(),
-            ]);
-
-            return null;
         }
+
+        return null;
     }
 }

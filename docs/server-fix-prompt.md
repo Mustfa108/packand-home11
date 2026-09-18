@@ -44,7 +44,7 @@ curl -i -X OPTIONS "https://YOUR_API_ORIGIN/api/community-chat/messages" \
 
 ```env
 GEMINI_API_KEY=YOUR_REAL_KEY
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.6-flash
 ```
 
 أو ضع المفتاح من لوحة الأدمن: `/admin/settings/ai`.
