@@ -102,7 +102,7 @@ class SiteSettingService
     /**
      * Active for ~24h after a quota/rate-limit hit (typical free-tier daily reset window).
      *
-     * @return array{active: bool, hit_at: string, http_status: ?int, error_status: ?string, last_error: ?string, message_ar: string, log_hint_ar: string}|null
+     * @return array{active: bool, hit_at: string, http_status: ?int, error_status: ?string, last_error: ?string, title_ar: string, message_ar: string, action_ar: string}|null
      */
     public function geminiQuotaAlert(): ?array
     {
@@ -131,8 +131,9 @@ class SiteSettingService
             'http_status' => $http !== null && $http !== '' ? (int) $http : null,
             'error_status' => $errorStatus ? (string) $errorStatus : null,
             'last_error' => $lastError ? (string) $lastError : null,
-            'message_ar' => 'يبدو أن الحد اليومي أو حصة الطلبات المجانية لمفتاح Gemini قد استُنفدت. الميزات الذكية قد ترجع تحليلاً مبسّطاً حتى تُعاد تعبئة الحصة (عادةً خلال 24 ساعة) أو تستخدم مفتاحاً/خطة أعلى.',
-            'log_hint_ar' => 'في لوج السيرفر (قناة ai) ابحث عن: status 429 أو RESOURCE_EXHAUSTED أو كلمات quota / rate limit / exceeded your current quota. خطأ 503 مع "high demand" ليس حداً يومياً بل ضغطاً مؤقتاً.',
+            'title_ar' => 'تم استنفاد الحد اليومي لمفتاح Gemini',
+            'message_ar' => 'رصد النظام أن مفتاح الذكاء الاصطناعي وصل إلى حده اليومي (أو حصة الطلبات المجانية). لذلك قد تظهر للمستخدمين تحليلات مبسّطة بدل التحليل الذكي الكامل.',
+            'action_ar' => 'انتظر عادةً حتى اليوم التالي لإعادة تعبئة الحصة، أو استبدل المفتاح بمفتاح آخر / خطة أعلى من إعدادات Google AI، ثم احفظ المفتاح الجديد هنا.',
         ];
     }
 
